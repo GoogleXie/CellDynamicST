@@ -7,111 +7,109 @@
     <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="about.html">About</a></li>
+                <li><a href="tutorial.html">Tutorial</a></li>
+                <li><a href="contact.html">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
     <div class="container">
-        <header>
-            <nav>
-                <ul>
-                    <li><a href="index.html">Home</a></li>
-                    <li><a href="about.html">About</a></li>
-                    <li><a href="tutorial.html">Tutorial</a></li>
-                    <li><a href="contact.html">Contact</a></li>
-                </ul>
-            </nav>
-        </header>
-        <div class="main">
-            <div class="sidebar">
-                <ul class="menu">
-                    <li><a href="#">Data Registration</a>
-                        <ul class="submenu">
-                            <li><a href="#">Image Preprocess</a></li>
-                            <li><a href="#">Reference Slice Reconstruction</a></li>
-                            <li><a href="#">Image Registration with STSHARCQ</a></li>
-                            <li><a href="#">Visualize and Check Registration</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Data Preprocess</a>
-                        <ul class="submenu">
-                            <li><a href="#">Incorporating Anatomical Annotation</a></li>
-                            <li><a href="#">Registration of Experimental Design</a></li>
-                            <li><a href="#">Anatomical Tree Construction</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Cell Typing</a>
-                        <ul class="submenu">
-                            <li><a href="#">Find Baseline Cell Clusters</a></li>
-                            <li><a href="#">Train Classification Model</a></li>
-                            <li><a href="#">Generalized Cell Cluster Identification</a></li>
-                            <li><a href="#">Identify Neurotransmitter Type</a></li>
-                            <li><a href="#">Find Cell Type Marker Gene</a></li>
-                            <li><a href="#">Cell Type Annotation</a></li>
-                            <li><a href="#">Glial Type Annotation</a></li>
-                            <li><a href="#">Manual Check and Refine Annotation</a></li>
-                            <li><a href="#">Classify by Mesostructured Cell Types</a></li>
-                            <li><a href="#">General Type Classification</a></li>
-                            <li><a href="#">Cell Type Visualization</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Atlas Visualization</a>
-                        <ul class="submenu">
-                            <li><a href="#">Adjust Cell Mapping Based on Reference Atlas</a></li>
-                            <li><a href="#">Cell Type Visualization on Atlas</a></li>
-                            <li><a href="#">Neurotransmitter Type Visualization</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Spatial Cell Dynamics</a>
-                        <ul class="submenu">
-                            <li><a href="#">Spatial Cell Type Distribution Comparison and Visualization</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Functional Dynamics</a>
-                        <ul class="submenu">
-                            <li><a href="#">Batch Go Enrichment Screening</a></li>
-                            <li><a href="#">Spatial Go Enrichment</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Communication Dynamics</a>
-                        <ul class="submenu">
-                            <li><a href="#">Cell-Cell Interaction with CellChat2</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Connectivity Dynamics</a>
-                        <ul class="submenu">
-                            <li><a href="#">Inter-regional DEG</a></li>
-                            <li><a href="#">Gene Coexpression Analysis</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Cell Dynamics During Opioid Dependence Formation</a>
-                        <ul class="submenu">
-                            <li><a href="#">Trajectory Matrix Formation</a></li>
-                            <li><a href="#">Control Energy Simulation</a></li>
-                            <li><a href="#">Network Control Energy Visualization</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Cell Dynamics with Neuropsychiatric Gene Set</a>
-                        <ul class="submenu">
-                            <li><a href="#">Extract Gene Set from AnocoDatabase</a></li>
-                            <li><a href="#">Perform Regional to Structural Differential Expression Analysis</a></li>
-                            <li><a href="#">Data Visualization</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="#">Psychiatric Susceptibility Inference by Cell Type Distribution</a>
-                        <ul class="submenu">
-                            <li><a href="#">Cell Type Library Construction</a></li>
-                            <li><a href="#">Model Train</a></li>
-                            <li><a href="#">Back Inference and Visualization</a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-            <div class="content">
-                <h1>Official Guidelines to Install and Use CellDynamicST Package to Process Your Spatial Transcriptomic Data</h1>
-                <p>This website provides a comprehensive tutorial for using our GitHub package.</p>
-                <!-- Add your data and example figures below -->
-                <div class="example">
-                    <h2>Example Data and Figures</h2>
-                    <p>Here you can put some of your data and example figures to illustrate the use of your package.</p>
-                    <img src="assets/images/example.png" alt="Example Figure">
-                </div>
+        <div class="sidebar">
+            <ul class="menu">
+                <li><a href="#">Data Registration</a>
+                    <ul class="submenu">
+                        <li><a href="#">Image Preprocess</a></li>
+                        <li><a href="#">Reference Slice Reconstruction</a></li>
+                        <li><a href="#">Image Registration with STSHARCQ</a></li>
+                        <li><a href="#">Visualize and Check Registration</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Data Preprocess</a>
+                    <ul class="submenu">
+                        <li><a href="#">Incorporating Anatomical Annotation</a></li>
+                        <li><a href="#">Registration of Experimental Design</a></li>
+                        <li><a href="#">Anatomical Tree Construction</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Cell Typing</a>
+                    <ul class="submenu">
+                        <li><a href="#">Find Baseline Cell Clusters</a></li>
+                        <li><a href="#">Train Classification Model</a></li>
+                        <li><a href="#">Generalized Cell Cluster Identification</a></li>
+                        <li><a href="#">Identify Neurotransmitter Type</a></li>
+                        <li><a href="#">Find Cell Type Marker Gene</a></li>
+                        <li><a href="#">Cell Type Annotation</a></li>
+                        <li><a href="#">Glial Type Annotation</a></li>
+                        <li><a href="#">Manual Check and Refine Annotation</a></li>
+                        <li><a href="#">Classify by Mesostructured Cell Types</a></li>
+                        <li><a href="#">General Type Classification</a></li>
+                        <li><a href="#">Cell Type Visualization</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Atlas Visualization</a>
+                    <ul class="submenu">
+                        <li><a href="#">Adjust Cell Mapping Based on Reference Atlas</a></li>
+                        <li><a href="#">Cell Type Visualization on Atlas</a></li>
+                        <li><a href="#">Neurotransmitter Type Visualization</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Spatial Cell Dynamics</a>
+                    <ul class="submenu">
+                        <li><a href="#">Spatial Cell Type Distribution Comparison and Visualization</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Functional Dynamics</a>
+                    <ul class="submenu">
+                        <li><a href="#">Batch Go Enrichment Screening</a></li>
+                        <li><a href="#">Spatial Go Enrichment</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Communication Dynamics</a>
+                    <ul class="submenu">
+                        <li><a href="#">Cell-Cell Interaction with CellChat2</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Connectivity Dynamics</a>
+                    <ul class="submenu">
+                        <li><a href="#">Inter-regional DEG</a></li>
+                        <li><a href="#">Gene Coexpression Analysis</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Cell Dynamics During Opioid Dependence Formation</a>
+                    <ul class="submenu">
+                        <li><a href="#">Trajectory Matrix Formation</a></li>
+                        <li><a href="#">Control Energy Simulation</a></li>
+                        <li><a href="#">Network Control Energy Visualization</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Cell Dynamics with Neuropsychiatric Gene Set</a>
+                    <ul class="submenu">
+                        <li><a href="#">Extract Gene Set from AnocoDatabase</a></li>
+                        <li><a href="#">Perform Regional to Structural Differential Expression Analysis</a></li>
+                        <li><a href="#">Data Visualization</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Psychiatric Susceptibility Inference by Cell Type Distribution</a>
+                    <ul class="submenu">
+                        <li><a href="#">Cell Type Library Construction</a></li>
+                        <li><a href="#">Model Train</a></li>
+                        <li><a href="#">Back Inference and Visualization</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        <div class="content">
+            <h1>Official Guidelines to Install and Use CellDynamicST Package to Process Your Spatial Transcriptomic Data</h1>
+            <p>This website provides a comprehensive tutorial for using our GitHub package.</p>
+            <!-- Add your data and example figures below -->
+            <div class="example">
+                <h2>Example Data and Figures</h2>
+                <p>Here you can put some of your data and example figures to illustrate the use of your package.</p>
+                <img src="assets/images/example.png" alt="Example Figure">
             </div>
         </div>
     </div>

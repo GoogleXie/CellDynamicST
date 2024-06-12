@@ -3,8 +3,9 @@ body {
     margin: 0;
     padding: 0;
     display: flex;
-    height: 100vh;
     flex-direction: column;
+    height: 100vh;
+    background-color: #e0f7fa; /* Very light blue background */
 }
 
 header {
@@ -37,10 +38,10 @@ header nav ul li a {
 
 .sidebar {
     width: 25%;
-    background-color: #f8f9fa;
-    height: 100vh;
+    background-color: #b2ebf2; /* Lighter blue */
+    height: calc(100vh - 80px); /* Adjust height to fit viewport */
     overflow-y: auto;
-    border-right: 1px solid #ddd;
+    border-right: 2px solid #00796b; /* Dark black-green outline */
     padding: 20px;
     box-sizing: border-box;
 }
@@ -57,7 +58,7 @@ header nav ul li a {
 .menu > li > a {
     text-decoration: none;
     font-weight: bold;
-    color: #333;
+    color: #004d40; /* Darker teal color */
     display: block;
     padding: 10px;
     border-radius: 5px;
@@ -65,7 +66,7 @@ header nav ul li a {
 }
 
 .menu > li > a:hover {
-    background-color: #007bff;
+    background-color: #00796b; /* Hover color */
     color: white;
 }
 
@@ -80,7 +81,7 @@ header nav ul li a {
 
 .submenu > li > a {
     text-decoration: none;
-    color: #555;
+    color: #004d40; /* Darker teal color */
     display: block;
     padding: 8px;
     border-radius: 5px;
@@ -88,7 +89,7 @@ header nav ul li a {
 }
 
 .submenu > li > a:hover {
-    background-color: #e2e6ea;
+    background-color: #80cbc4; /* Lighter hover color */
 }
 
 .content {
