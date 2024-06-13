@@ -21,10 +21,15 @@ header {
     padding: 0 20px;
 }
 
+.icon-container {
+    display: flex;
+    align-items: center;
+}
+
 .home-icon {
-    width: 40px; /* Smaller size for the icon */
-    height: 40px;
-    margin-right: 20px; /* Add some space between the icon and the nav */
+    width: 30px; /* Smaller size for the icons */
+    height: 30px;
+    margin-right: 10px; /* Space between icons */
 }
 
 header nav ul {
