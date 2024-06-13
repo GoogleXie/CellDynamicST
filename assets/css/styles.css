@@ -14,15 +14,27 @@ header {
     padding: 1em 0;
 }
 
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
+
+.home-icon {
+    width: 50px; /* Adjust the size as needed */
+    height: 50px;
+}
+
 header nav ul {
     list-style: none;
     margin: 0;
     padding: 0;
-    text-align: center;
+    display: flex;
+    align-items: center;
 }
 
 header nav ul li {
-    display: inline;
     margin: 0 1em;
 }
 
