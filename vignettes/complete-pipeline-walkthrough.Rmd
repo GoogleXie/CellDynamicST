@@ -45,9 +45,9 @@ publicly available **Oprm1 A118G** spatial transcriptomics dataset
 which profiles ~950,000 cells across mouse brain sections from four experimental
 groups in a 2×2 factorial design (Genotype: AA/GG × Treatment: SAL/MOR).
 
-The subset included here contains **996 cells** sampled from all four slides,
-focusing on major brain regions. This is sufficient to demonstrate every analysis
-step and visualization function.
+The subset included here contains **443 cells** sampled from all four slides
+across three posterior brain regions (Cerebellum, Hindbrain, Midbrain). This is
+sufficient to demonstrate every analysis step and visualization function.
 
 ## Experimental Design
 
@@ -560,7 +560,7 @@ affected between genotypes in response to treatment.
 
 ```{r enrichment-heatmap, fig.width=10, fig.height=8}
 # Generate example enrichment scores across brain regions
-regions <- c("Isocortex", "HPF", "CTXsp", "STR", "HY", "MB")
+regions <- c("CB", "HB", "MB")
 enrichment_matrix <- matrix(
   rnorm(n_terms * length(regions), 0, 2),
   nrow = n_terms, ncol = length(regions),
