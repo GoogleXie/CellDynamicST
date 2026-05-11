@@ -159,6 +159,10 @@ cdst_plot_multidim_heatmap <- function(
 #'   AllenSDK. Default FALSE.
 #' @param region_coords Named list of (x, y) coordinates per region (optional,
 #'   only used with use_simple = TRUE).
+#' @param coords_csv Path to precomputed coordinate CSV with columns:
+#'   acronym, struct_id, x, y. If NULL (default), the bundled
+#'   \code{inst/extdata/acronym_to_coord.csv} is used automatically.
+#'   Provide a custom CSV to override the default coordinates.
 #' @param min_edge_weight Minimum correlation to display. Default 0.3.
 #' @return Invisible output file path.
 #' @export
@@ -171,6 +175,7 @@ cdst_plot_wgcna_network <- function(
     resolution = 10,
     use_simple = FALSE,
     region_coords = NULL,
+    coords_csv = NULL,
     min_edge_weight = 0.3
 ) {
   py_script <- system.file("python", "wgcna_network_plot.py",
@@ -197,6 +202,9 @@ cdst_plot_wgcna_network <- function(
   }
   if (!is.null(title)) {
     cmd_parts <- c(cmd_parts, "--title", shQuote(title))
+  }
+  if (!is.null(coords_csv)) {
+    cmd_parts <- c(cmd_parts, "--coords", shQuote(coords_csv))
   }
   if (use_simple) {
     cmd_parts <- c(cmd_parts, "--simple")

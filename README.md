@@ -91,7 +91,7 @@ Force-directed network of hub genes (gold, larger nodes) and their co-expressed 
 
 ### Atlas Network (Allen Brain Atlas)
 
-Brain region co-expression network overlaid on Allen Brain Atlas contours. Supports sagittal, coronal, and horizontal slice planes with configurable coordinates.
+Brain region co-expression network overlaid on Allen Brain Atlas contours. Supports sagittal, coronal, and horizontal slice planes. Ships with precomputed region centroids (`inst/extdata/acronym_to_coord.csv`, 672 structures) so the atlas overlay works without AllenSDK. Custom coordinate files can be supplied via the `--coords` CLI argument or the `coords_csv` parameter.
 
 <p align="center">
   <img src="man/figures/atlas_network_sagittal.png" width="70%" alt="Atlas Network Sagittal"/>
@@ -709,7 +709,7 @@ cdst_plot_wgcna_circos(
 
 ### Atlas network
 
-Overlay co-expression networks on Allen Brain Atlas contours. Supports sagittal, coronal, and horizontal planes with configurable slice coordinates:
+Overlay co-expression networks on Allen Brain Atlas contours. Supports sagittal, coronal, and horizontal planes with configurable slice coordinates. The package ships with precomputed region centroids (`inst/extdata/acronym_to_coord.csv`, 672 structures derived from the Allen 10 um annotation volume) so the atlas overlay works out of the box without AllenSDK. You can also supply your own coordinate file via the `coords_csv` parameter:
 
 ```r
 cdst_plot_wgcna_network(
@@ -718,7 +718,8 @@ cdst_plot_wgcna_network(
   output_file = "cdst_output/figures/atlas_network.png",
   plot_type = "atlas",
   plane = "sagittal",   # or "coronal" or "horizontal"
-  slice = NULL           # NULL for automatic midpoint
+  slice = NULL,          # NULL for automatic midpoint
+  coords_csv = NULL      # NULL uses bundled coords; or provide custom CSV path
 )
 ```
 
@@ -917,7 +918,7 @@ Each checkpoint is a standalone `.rds` file that can be loaded independently. Th
 | `cdst_plot_volcano(deg, contrast)` | Volcano plot for DEG results |
 | `cdst_plot_deg_scatter(deg, contrast)` | MA-style DEG scatter plot |
 | `cdst_plot_network(edges, nodes, ...)` | Hub gene network (R-native, igraph) |
-| `cdst_plot_wgcna_network(csv, ...)` | WGCNA atlas network (Python, AllenSDK) |
+| `cdst_plot_wgcna_network(csv, ...)` | WGCNA atlas network (Python, bundled coords or AllenSDK) |
 | `cdst_plot_wgcna_circos(csv, ...)` | WGCNA circos plot (Python) |
 | `cdst_plot_wgcna_hub_network(csv, ...)` | Hub gene force-directed network (Python) |
 | `cdst_plot_proportions(proportions)` | Cell type proportions bar plot |

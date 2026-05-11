@@ -61,6 +61,40 @@ def _norm(series):
 # =============================================================================
 # ALLEN BRAIN ATLAS HELPERS
 # =============================================================================
+def _load_precomputed_coords(coords_csv):
+    """
+    Load precomputed region centers from a CSV file.
+    The CSV must have columns: acronym, struct_id, x, y
+    where x,y are the precomputed 3D centroids (DV, AP order from
+    np.flip(center[:2]) applied to the full Allen annotation volume).
+
+    Returns
+    -------
+    acronym_coords : dict  {acronym: np.array([x, y])}
+    id_coords : dict  {struct_id: np.array([x, y])}
+    """
+    df = pd.read_csv(coords_csv)
+    acronym_coords = {}
+    id_coords = {}
+    for _, row in df.iterrows():
+        acr = str(row["acronym"])
+        sid = int(row["struct_id"])
+        coord = np.array([float(row["x"]), float(row["y"])])
+        acronym_coords[acr] = coord
+        id_coords[sid] = coord
+    return acronym_coords, id_coords
+
+
+def _get_bundled_coords_path():
+    """Return the path to the bundled acronym_to_coord.csv in inst/extdata."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Script is in inst/python/, CSV is in inst/extdata/
+    extdata = os.path.join(script_dir, "..", "extdata", "acronym_to_coord.csv")
+    if os.path.exists(extdata):
+        return extdata
+    return None
+
+
 def _load_allen_annotation(cache_dir=None, resolution=10):
     """
     Download (or load from cache) the Allen Mouse Brain annotation volume
@@ -160,6 +194,7 @@ def plot_atlas_network(
     slice_idx=None,
     resolution=10,
     cache_dir=None,
+    coords_csv=None,
     title=None,
     node_size_col="n_genes",
     node_color_col="module_color",
@@ -189,6 +224,12 @@ def plot_atlas_network(
         For horizontal: DV coordinate (y).
     resolution : int
         Allen annotation volume resolution in microns (10 or 25).
+    coords_csv : str or None
+        Path to precomputed coordinate CSV (acronym, struct_id, x, y).
+        If provided, uses these coordinates directly instead of computing
+        from the Allen annotation volume. The bundled file at
+        inst/extdata/acronym_to_coord.csv is used automatically if no
+        coords_csv is specified and AllenSDK is not available.
     """
     import networkx as nx
     from sklearn.preprocessing import MinMaxScaler
@@ -198,69 +239,105 @@ def plot_atlas_network(
     except ImportError:
         has_adjust = False
 
-    # Load Allen annotation
-    print(f"Loading Allen Brain Atlas (resolution={resolution}um)...")
-    annotation, structure_tree = _load_allen_annotation(cache_dir, resolution)
-    print(f"  Annotation volume shape: {annotation.shape} (AP, DV, ML)")
+    # Determine coordinate source
+    use_precomputed = False
+    acronym_coords = None
+    annotation = None
+    structure_tree = None
+    annotation_slice = None
 
-    # Compute region centers from FULL 3D volume (matching original script)
-    print("Computing region centers from full 3D volume...")
-    region_centers = _get_region_centers_3d(annotation, structure_tree)
-    print(f"  Computed centers for {len(region_centers)} structures")
-
-    # Determine slice index
-    shape = annotation.shape  # (AP, DV, ML)
-    if plane == "sagittal":
-        if slice_idx is None:
-            slice_idx = shape[2] // 2
-        slice_idx = min(max(0, slice_idx), shape[2] - 1)
-        # Original: annotation_slice = np.flipud(np.transpose(annotation[:, :, z]))
-        annotation_slice = np.flipud(np.transpose(annotation[:, :, slice_idx]))
-    elif plane == "coronal":
-        if slice_idx is None:
-            slice_idx = shape[0] // 2
-        slice_idx = min(max(0, slice_idx), shape[0] - 1)
-        annotation_slice = np.flipud(np.transpose(annotation[slice_idx, :, :]))
-    elif plane == "horizontal":
-        if slice_idx is None:
-            slice_idx = shape[1] // 2
-        slice_idx = min(max(0, slice_idx), shape[1] - 1)
-        annotation_slice = np.flipud(np.transpose(annotation[:, slice_idx, :]))
+    if coords_csv is not None:
+        # User explicitly provided a coords file
+        print(f"Loading precomputed coordinates from: {coords_csv}")
+        acronym_coords, id_coords = _load_precomputed_coords(coords_csv)
+        use_precomputed = True
+        print(f"  Loaded {len(acronym_coords)} region coordinates")
     else:
-        raise ValueError(f"Unknown plane '{plane}'. Use sagittal/coronal/horizontal.")
+        # Try bundled coords first, then AllenSDK
+        bundled = _get_bundled_coords_path()
+        if bundled:
+            print(f"Loading bundled precomputed coordinates: {bundled}")
+            acronym_coords, id_coords = _load_precomputed_coords(bundled)
+            use_precomputed = True
+            print(f"  Loaded {len(acronym_coords)} region coordinates")
 
-    print(f"  Plane: {plane}, slice index: {slice_idx}")
-    print(f"  Annotation slice shape: {annotation_slice.shape}")
+    if not use_precomputed:
+        # Fall back to AllenSDK computation
+        print(f"Loading Allen Brain Atlas (resolution={resolution}um)...")
+        annotation, structure_tree = _load_allen_annotation(cache_dir, resolution)
+        print(f"  Annotation volume shape: {annotation.shape} (AP, DV, ML)")
 
-    # Map acronyms to IDs
-    all_acronyms = set(nodes_df["region"].unique())
-    if "source" in edges_df.columns:
-        all_acronyms |= set(edges_df["source"].unique())
-    if "target" in edges_df.columns:
-        all_acronyms |= set(edges_df["target"].unique())
-    acronym_to_id = _map_acronyms_to_ids(structure_tree, all_acronyms)
-    print(f"  Mapped {len(acronym_to_id)}/{len(all_acronyms)} acronyms to IDs")
+        # Compute region centers from FULL 3D volume (matching original script)
+        print("Computing region centers from full 3D volume...")
+        region_centers = _get_region_centers_3d(annotation, structure_tree)
+        print(f"  Computed centers for {len(region_centers)} structures")
+    else:
+        region_centers = None  # Not needed when using precomputed
 
-    # For parent regions not directly in region_centers, aggregate descendants
-    for acr, sid in acronym_to_id.items():
-        if sid not in region_centers:
-            parent_center = _get_parent_center(structure_tree, sid, region_centers)
-            if parent_center is not None:
-                region_centers[sid] = parent_center
-                print(f"  Aggregated descendants for '{acr}' (id={sid})")
-            else:
-                print(f"  No descendant centers for '{acr}'")
+    # Try to load annotation for background contours (optional)
+    if annotation is None:
+        try:
+            print("Loading Allen annotation for background contours...")
+            annotation, structure_tree = _load_allen_annotation(cache_dir, resolution)
+            print(f"  Annotation volume shape: {annotation.shape}")
+        except (ImportError, Exception) as e:
+            print(f"  AllenSDK not available for background contours: {e}")
+            print("  Proceeding without brain structure contours.")
+
+    # Determine slice index and annotation slice (if annotation available)
+    if annotation is not None:
+        shape = annotation.shape  # (AP, DV, ML)
+        if plane == "sagittal":
+            if slice_idx is None:
+                slice_idx = shape[2] // 2
+            slice_idx = min(max(0, slice_idx), shape[2] - 1)
+            annotation_slice = np.flipud(np.transpose(annotation[:, :, slice_idx]))
+        elif plane == "coronal":
+            if slice_idx is None:
+                slice_idx = shape[0] // 2
+            slice_idx = min(max(0, slice_idx), shape[0] - 1)
+            annotation_slice = np.flipud(np.transpose(annotation[slice_idx, :, :]))
+        elif plane == "horizontal":
+            if slice_idx is None:
+                slice_idx = shape[1] // 2
+            slice_idx = min(max(0, slice_idx), shape[1] - 1)
+            annotation_slice = np.flipud(np.transpose(annotation[:, slice_idx, :]))
+        else:
+            raise ValueError(f"Unknown plane '{plane}'. Use sagittal/coronal/horizontal.")
+        print(f"  Plane: {plane}, slice index: {slice_idx}")
+        print(f"  Annotation slice shape: {annotation_slice.shape}")
+
+    if not use_precomputed:
+        # Map acronyms to IDs (AllenSDK path)
+        all_acronyms = set(nodes_df["region"].unique())
+        if "source" in edges_df.columns:
+            all_acronyms |= set(edges_df["source"].unique())
+        if "target" in edges_df.columns:
+            all_acronyms |= set(edges_df["target"].unique())
+        acronym_to_id = _map_acronyms_to_ids(structure_tree, all_acronyms)
+        print(f"  Mapped {len(acronym_to_id)}/{len(all_acronyms)} acronyms to IDs")
+
+        # For parent regions not directly in region_centers, aggregate descendants
+        for acr, sid in acronym_to_id.items():
+            if sid not in region_centers:
+                parent_center = _get_parent_center(structure_tree, sid, region_centers)
+                if parent_center is not None:
+                    region_centers[sid] = parent_center
+                    print(f"  Aggregated descendants for '{acr}' (id={sid})")
+                else:
+                    print(f"  No descendant centers for '{acr}'")
 
     # Build figure
     fig, ax = plt.subplots(1, 1, figsize=figsize)
 
-    # Draw brain structure contours from annotation slice
-    unique_structs = np.unique(annotation_slice)
-    for sid in unique_structs:
-        if sid == 0:
-            continue
-        mask = (annotation_slice == sid).astype(float)
-        ax.contour(mask, colors="grey", levels=[0.5], linewidths=0.8, alpha=0.2)
+    # Draw brain structure contours from annotation slice (if available)
+    if annotation_slice is not None:
+        unique_structs = np.unique(annotation_slice)
+        for sid in unique_structs:
+            if sid == 0:
+                continue
+            mask = (annotation_slice == sid).astype(float)
+            ax.contour(mask, colors="grey", levels=[0.5], linewidths=0.8, alpha=0.2)
 
     # Build networkx graph
     G = nx.Graph()
@@ -269,27 +346,43 @@ def plot_atlas_network(
 
     for _, row in nodes_df.iterrows():
         acr = row["region"]
-        rid = acronym_to_id.get(acr)
-        if rid and rid in region_centers:
-            center = np.array(region_centers[rid])
-            # Original transformation:
-            #   center = np.flipud(np.transpose(center))
-            #   center[1] = annotation.shape[1] - center[1]
-            # center is [DV, AP] from _get_region_centers_3d
-            # flipud(transpose) on a 1D array: effectively swaps the two values -> [AP, DV]
-            center = np.flipud(np.transpose(center))  # [AP, DV] -> swap -> [DV, AP] ... 
-            # Actually for a 1D array, transpose is no-op, flipud reverses: [DV, AP] -> [AP, DV]
-            # So center is now [AP, DV]
-            center[1] = annotation.shape[1] - center[1]  # flip DV axis
-            
-            cx, cy = center[0], center[1]
-            print(f"  center for: {acr} ({cx:.1f}, {cy:.1f})")
-            
-            G.add_node(acr, size=row.get(node_size_col, 50),
-                       color=row.get(node_color_col, "grey"))
-            pos[acr] = (cx, cy)
+
+        if use_precomputed:
+            # Use precomputed coordinates directly
+            if acr in acronym_coords:
+                coord = acronym_coords[acr]
+                # The precomputed coords are already in the correct space:
+                # x,y from the original script's get_region_centers output
+                # Apply the same transformation as the original script:
+                #   center = np.flipud(np.transpose(center))  -> reverses [DV,AP] to [AP,DV]
+                #   center[1] = annotation.shape[1] - center[1]  -> flip DV axis
+                # The precomputed CSV stores the raw centers (before this transform),
+                # so we apply the same transform here.
+                center = np.array(coord, dtype=float)
+                center = np.flipud(center)  # [DV, AP] -> [AP, DV]
+                # For the DV flip, we need annotation.shape[1]
+                # Default Allen 10um volume: shape[1] = 800 (DV dimension)
+                dv_dim = annotation.shape[1] if annotation is not None else 800
+                center[1] = dv_dim - center[1]
+                cx, cy = center[0], center[1]
+                G.add_node(acr, size=row.get(node_size_col, 50),
+                           color=row.get(node_color_col, "grey"))
+                pos[acr] = (cx, cy)
+            else:
+                print(f"  Warning: '{acr}' not found in precomputed coordinates")
         else:
-            print(f"  Warning: '{acr}' not found in atlas")
+            # AllenSDK path
+            rid = acronym_to_id.get(acr)
+            if rid and rid in region_centers:
+                center = np.array(region_centers[rid])
+                center = np.flipud(np.transpose(center))
+                center[1] = annotation.shape[1] - center[1]
+                cx, cy = center[0], center[1]
+                G.add_node(acr, size=row.get(node_size_col, 50),
+                           color=row.get(node_color_col, "grey"))
+                pos[acr] = (cx, cy)
+            else:
+                print(f"  Warning: '{acr}' not found in atlas")
 
     # Normalize edge weights for line width
     if edge_weight_col in edges_df.columns:
@@ -606,6 +699,9 @@ if __name__ == "__main__":
     p_atlas.add_argument("--resolution", type=int, default=10)
     p_atlas.add_argument("--title", default=None)
     p_atlas.add_argument("--min-edge-weight", type=float, default=0.0)
+    p_atlas.add_argument("--coords", default=None,
+                         help="Path to precomputed coordinate CSV (acronym,struct_id,x,y). "
+                              "If not provided, uses bundled coords or falls back to AllenSDK.")
 
     # circos
     p_circ = sub.add_parser("circos", help="Circos enrichment plot")
@@ -629,6 +725,7 @@ if __name__ == "__main__":
                 plane=args.plane,
                 slice_idx=args.slice,
                 resolution=args.resolution,
+                coords_csv=args.coords,
                 title=args.title,
                 min_edge_weight=args.min_edge_weight,
             )
