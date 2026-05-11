@@ -1,12 +1,113 @@
 # CellDynamicST
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/YourLab/CellDynamicST/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/YourLab/CellDynamicST/actions/workflows/R-CMD-check.yaml)
-[![codecov](https://codecov.io/gh/YourLab/CellDynamicST/branch/main/graph/badge.svg)](https://codecov.io/gh/YourLab/CellDynamicST)
+[![R-CMD-check](https://github.com/GoogleXie/CellDynamicST/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/GoogleXie/CellDynamicST/actions/workflows/R-CMD-check.yaml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 <!-- badges: end -->
 
 **CellDynamicST** is an R package for comprehensive spatial transcriptomic analysis of cell dynamics, gene expression networks, and neurotransmitter classification in brain tissue. It implements a reference-based generalized clustering algorithm with Random Forest label propagation, neurotransmitter and glial cell classification via Gaussian Mixture Models, hierarchical cell type annotation, spatial GO enrichment at single-cell resolution, inter-regional weighted gene co-expression network analysis (WGCNA), and hub gene detection. The package accepts any spatial transcriptomic dataset (CosMx, MERFISH, Visium) as a Seurat object and is configured via a single YAML file specifying experimental design, comparisons, and analysis parameters.
+
+---
+
+## Visualization Gallery
+
+CellDynamicST generates publication-quality figures at every stage of the analysis pipeline. Below are representative outputs from the Oprm1 A118G spatial transcriptomics dataset.
+
+### Cell Type Hierarchy (Alluvial / Sankey)
+
+Multi-level alluvial diagram showing how cells flow from broad categories (Neuronal, Glial, Other) through neurotransmitter types to detailed cell type annotations. Band widths are proportional to cell counts.
+
+<p align="center">
+  <img src="man/figures/01_hierarchy_tree.png" width="85%" alt="Cell Type Hierarchy Alluvial Diagram"/>
+</p>
+
+### Multi-Dimensional Heatmap
+
+Circle heatmap displaying cell type × brain region interactions. Circle size encodes cell count; color encodes percentage change between conditions. Top and right margins show stacked bars for cell type and neurotransmitter distributions.
+
+<p align="center">
+  <img src="man/figures/AA_MOR_vs_SAL_heatmap.png" width="75%" alt="Multi-Dimensional Heatmap"/>
+</p>
+
+### Disproportion Analysis on t-SNE
+
+t-SNE embedding colored by disproportion z-scores between two experimental conditions. Blue indicates enrichment in condition A (depletion in B); red indicates enrichment in condition B. Labels at cell type centroids identify the most affected populations.
+
+<p align="center">
+  <img src="man/figures/02_disproportion_tsne.png" width="65%" alt="Disproportion t-SNE"/>
+</p>
+
+### Volcano Plot
+
+Differential expression volcano plot with genes colored by significance and direction: blue = significantly downregulated, red = significantly upregulated, grey = not significant. Top genes are labeled by name.
+
+<p align="center">
+  <img src="man/figures/06_volcano.png" width="60%" alt="Volcano Plot"/>
+</p>
+
+### GO Enrichment Comparison (2×2 Design)
+
+Bidirectional GO enrichment plot optimized for 2×2 factorial experiments. Central bars show the direction and magnitude of difference between conditions. Left/right dots represent weighted enrichment scores for each condition, with dot size encoding |log2FC| and color encoding statistical significance.
+
+<p align="center">
+  <img src="man/figures/06_enrichment_lollipop.png" width="70%" alt="GO Enrichment Comparison"/>
+</p>
+
+### WGCNA Module-Trait Heatmap
+
+Pearson correlation between WGCNA module eigengenes and experimental traits. Significance is indicated by stars (* p < 0.05, ** p < 0.01, *** p < 0.001).
+
+<p align="center">
+  <img src="man/figures/06_trait_heatmap.png" width="55%" alt="Module-Trait Heatmap"/>
+</p>
+
+### WGCNA Circos Plot
+
+Multi-ring circos diagram with WGCNA modules as segments. Concentric rings display different experimental comparisons (OUD enrichment, treatment effects by genotype, genotype effects by treatment).
+
+<p align="center">
+  <img src="man/figures/circos.png" width="60%" alt="WGCNA Circos Plot"/>
+</p>
+
+### Hub Gene Network
+
+Force-directed network of hub genes (gold, larger nodes) and their co-expressed neighbors (light blue). Edge thickness reflects co-expression strength.
+
+<p align="center">
+  <img src="man/figures/hub_network.png" width="55%" alt="Hub Gene Network"/>
+</p>
+
+### Atlas Network (Allen Brain Atlas)
+
+Brain region co-expression network overlaid on Allen Brain Atlas contours. Supports sagittal, coronal, and horizontal slice planes with configurable coordinates.
+
+<p align="center">
+  <img src="man/figures/atlas_network_sagittal.png" width="70%" alt="Atlas Network Sagittal"/>
+</p>
+
+### Spatial Enrichment
+
+Spatial scatter plot showing GO term enrichment scores mapped onto tissue coordinates. Orange = enriched; purple = depleted.
+
+<p align="center">
+  <img src="man/figures/04_spatial_enrichment.png" width="60%" alt="Spatial Enrichment"/>
+</p>
+
+### QC Summary
+
+Three-panel QC figure: distribution of transcripts per cell, genes per cell, and genes vs. transcripts scatter across experimental groups.
+
+<p align="center">
+  <img src="man/figures/06_qc_standalone.png" width="85%" alt="QC Summary"/>
+</p>
+
+### Cell Proportions
+
+Stacked bar chart of cell type proportions across experimental groups, revealing genotype- and treatment-dependent shifts in cellular composition.
+
+<p align="center">
+  <img src="man/figures/06_proportions_standalone.png" width="60%" alt="Cell Proportions"/>
+</p>
 
 ---
 
@@ -39,26 +140,26 @@
 
 ```r
 install.packages("remotes")
-remotes::install_github("YourLab/CellDynamicST")
+remotes::install_github("GoogleXie/CellDynamicST")
 ```
 
 If you need all optional dependencies (WGCNA, clusterProfiler, igraph for network plots, etc.), install with:
 
 ```r
-remotes::install_github("YourLab/CellDynamicST", dependencies = TRUE)
+remotes::install_github("GoogleXie/CellDynamicST", dependencies = TRUE)
 ```
 
 ### From a local tarball
 
 ```bash
-git clone https://github.com/YourLab/CellDynamicST.git
+git clone https://github.com/GoogleXie/CellDynamicST.git
 R CMD INSTALL CellDynamicST
 ```
 
 ### With Docker (zero configuration)
 
 ```bash
-git clone https://github.com/YourLab/CellDynamicST.git
+git clone https://github.com/GoogleXie/CellDynamicST.git
 cd CellDynamicST
 docker-compose up
 # Open http://localhost:8787 in your browser (RStudio Server)
@@ -168,20 +269,16 @@ samples:
     group: "GG MOR"
 
 # ---- Pairwise comparisons for DEG analysis ----
-# If omitted, all pairwise comparisons are auto-generated.
 comparisons:
   - name: "treatment_AA"
     group1: "AA SAL"
     group2: "AA MOR"
-
   - name: "treatment_GG"
     group1: "GG SAL"
     group2: "GG MOR"
-
   - name: "genotype_baseline"
     group1: "AA SAL"
     group2: "GG SAL"
-
   - name: "genotype_treated"
     group1: "AA MOR"
     group2: "GG MOR"
@@ -214,8 +311,9 @@ wgcna:
 # ---- Brain atlas ----
 atlas:
   name: "Allen_CCFv3"
-  plane: "sagittal"
-  z_plane: 510
+  plane: "sagittal"         # sagittal, coronal, or horizontal
+  slice: null               # null = auto midpoint
+  resolution: 10            # 10um or 25um
   region_columns:
     L3: "brain_region_L3"
     L5: "brain_region_L5"
@@ -317,23 +415,29 @@ QC filtering removes low-quality cells based on the thresholds in your configura
 merged <- cdst_run_qc(merged, config)
 cat("Cells after QC:", ncol(merged), "\n")
 
-# Visualize QC metrics
-cdst_plot_qc(merged)
+# Normalization
+merged <- cdst_normalize(merged, method = "LogNormalize")
+
+# Identify highly variable genes
+merged <- cdst_find_variable_genes(merged, n_features = 3000)
 ```
 
-The QC plot shows three panels: (1) transcript counts per cell by group, (2) gene counts per cell by group, and (3) the transcript-gene relationship scatter plot. Inspect these to verify that the filtering thresholds are appropriate for your data. If too many cells are removed, relax the thresholds in the `qc:` section of your YAML file.
+Visualize QC metrics to verify filtering:
 
 ```r
-# Normalization (LogNormalize + scaling)
-merged <- cdst_normalize(merged)
+p <- cdst_plot_qc_standalone(
+  data = merged@meta.data,
+  group_col = "experiment_group",
+  count_col = "nCount_RNA",
+  feature_col = "nFeature_RNA",
+  output_file = "cdst_output/figures/qc_summary.png",
+  width = 14, height = 5
+)
 ```
 
-By default, `cdst_normalize()` uses log-normalization with a scale factor of 10,000 and scales all genes. You can change the method:
-
-```r
-# SCTransform normalization (alternative)
-merged <- cdst_normalize(merged, normalization_method = "SCTransform")
-```
+<p align="center">
+  <img src="man/figures/06_qc_standalone.png" width="85%" alt="QC Summary"/>
+</p>
 
 Save checkpoint:
 
@@ -345,44 +449,11 @@ saveRDS(merged, "cdst_output/checkpoint_02_preprocessed.rds")
 
 ## 6. Step 3 — Clustering
 
-Clustering is the core of CellDynamicST. It performs PCA, removes technically biased components, builds a neighborhood graph, runs Louvain community detection, and optionally propagates labels from a reference dataset using a Random Forest classifier.
+CellDynamicST implements a reference-based generalized clustering algorithm. The reference group (marked `is_reference: true` in the config) is clustered first, then labels are propagated to other groups via Random Forest classification.
 
 ```r
 merged <- cdst_cluster(merged, config)
-```
-
-This single call does the following internally:
-
-1. Runs PCA on the top variable features (default: 100 PCs)
-2. Correlates each PC with log2(gene count) and removes PCs above the `bias_threshold` (default: 0.7) to eliminate technical variation
-3. Builds a shared nearest neighbor (SNN) graph using Annoy trees
-4. Runs Louvain clustering at the configured resolution
-5. Computes UMAP embedding for visualization
-6. If a reference Seurat object is provided, trains a Random Forest classifier and propagates labels to each cluster
-
-The cluster assignments are stored in `merged$cdst_cluster`.
-
-```r
-# Check cluster counts
-table(merged$cdst_cluster)
-
-# Visualize clusters on UMAP
-Seurat::DimPlot(merged, group.by = "cdst_cluster", label = TRUE)
-
-# Visualize clusters in spatial coordinates
-cdst_plot_spatial(merged, color_by = "cdst_cluster")
-```
-
-### Adjusting clustering resolution
-
-The `resolution` parameter controls granularity. Higher values produce more clusters. For spatial transcriptomic data with many cell types, values of 10 to 30 are common. For a coarser grouping, try 1 to 5.
-
-```r
-# Finer clustering
-merged <- cdst_cluster(merged, config, resolution = 30)
-
-# Coarser clustering
-merged <- cdst_cluster(merged, config, resolution = 5)
+table(merged$seurat_clusters)
 ```
 
 Save checkpoint:
@@ -395,51 +466,11 @@ saveRDS(merged, "cdst_output/checkpoint_03_clustered.rds")
 
 ## 7. Step 4 — Neurotransmitter Classification
 
-This step assigns each neuronal cluster to its primary neurotransmitter identity (Glutamatergic, GABAergic, Cholinergic, Dopaminergic, Serotonergic, or Mixed) based on the expression of canonical transporter and synthetic enzyme genes.
+Classify neurons by their primary neurotransmitter type (Glutamate, GABA, Dopamine, Serotonin, Acetylcholine) using marker gene expression and Gaussian Mixture Models.
 
 ```r
-merged <- cdst_classify_nt(merged)
+merged <- cdst_classify_nt(merged, nt_col = "neurotransmitter_type")
 table(merged$cdst_nt_type)
-```
-
-**How it works:** For each cluster, the function computes the fraction of cells expressing each marker gene above a threshold. If the fraction exceeds `min_fraction` (default: 0.3) for any marker in a neurotransmitter group, the cluster is assigned that identity. Clusters matching multiple groups are labeled "Mixed". Non-neuronal clusters (glia, endothelial, etc.) receive `NA`.
-
-### Default mouse markers
-
-| NT Type | Marker Genes |
-|---|---|
-| Glutamatergic | Slc17a7, Slc17a6, Slc17a8 |
-| GABAergic | Gad1, Gad2, Slc32a1 |
-| Cholinergic | Chat, Slc18a3, Slc5a7 |
-| Dopaminergic | Th, Slc6a3, Ddc |
-| Serotonergic | Tph2, Slc6a4, Ddc |
-
-### Using custom criteria
-
-Create a custom YAML file to define your own markers and thresholds:
-
-```yaml
-# my_nt_criteria.yaml
-neurotransmitter_types:
-  Glutamatergic:
-    markers: ["SLC17A7", "SLC17A6"]
-    threshold: 0.5
-    min_fraction: 0.25
-  GABAergic:
-    markers: ["GAD1", "GAD2"]
-    threshold: 0.5
-    min_fraction: 0.25
-```
-
-```r
-merged <- cdst_classify_nt(merged, criteria_path = "my_nt_criteria.yaml")
-# Note: cdst_classify_nt() and cdst_classify_glia() do not require the config object
-```
-
-Visualize:
-
-```r
-cdst_plot_spatial(merged, color_by = "cdst_nt_type")
 ```
 
 Save checkpoint:
@@ -452,73 +483,71 @@ saveRDS(merged, "cdst_output/checkpoint_04_nt_classified.rds")
 
 ## 8. Step 5 — Glial Subtype Classification
 
-Glial cells are further classified into subtypes using Gaussian Mixture Models (GMM) on canonical marker expression. This approach captures the continuous nature of glial identity better than hard thresholding.
+Classify glial cells into subtypes (Astrocyte, Oligodendrocyte, Microglia, OPC) using canonical markers and GMM.
 
 ```r
-merged <- cdst_classify_glia(merged)
-table(merged$cdst_glia_type, useNA = "ifany")
+merged <- cdst_classify_glia(merged, glia_col = "high_level_cell_type")
+table(merged$cdst_glia_type)
 ```
-
-**How it works:** For each glial marker set (Astrocyte, Oligodendrocyte, OPC, Microglia), the function fits a two-component GMM to the mean expression across cells in each cluster. Clusters assigned to the "high-expression" component are labeled with that glial subtype.
-
-### Default mouse glial markers
-
-| Subtype | Marker Genes |
-|---|---|
-| Astrocyte | Aqp4, Gfap, Aldh1l1, S100b |
-| Oligodendrocyte | Mbp, Plp1, Mog, Mag |
-| OPC | Pdgfra, Cspg4, Olig1 |
-| Microglia | Cx3cr1, P2ry12, Tmem119, Csf1r |
-
-### Building the hierarchical annotation
-
-After NT and glial classification, combine everything into a single hierarchical label:
-
-```r
-merged <- cdst_annotate_hierarchy(merged)
-```
-
-This creates a composite `cdst_cell_type` column that reads like: `"Glutamatergic_CA1"`, `"Astrocyte_Cortex"`, etc. — combining the cell identity with the dominant brain region.
 
 Save checkpoint:
 
 ```r
-saveRDS(merged, "cdst_output/checkpoint_05_annotated.rds")
+saveRDS(merged, "cdst_output/checkpoint_05_glia_classified.rds")
 ```
 
 ---
 
 ## 9. Step 6 — Cell Dynamics Analysis
 
-Cell dynamics analysis quantifies how cell type proportions change across experimental groups and brain regions. This is the foundation for understanding genotype × treatment effects on cellular composition.
-
-### Compute proportions
+Compute cell type proportions across experimental groups and brain regions, and build the distribution matrix for visualization.
 
 ```r
 proportions <- cdst_cell_proportions(merged, config)
-head(proportions)
-```
-
-The output is a data frame with columns: `cell_type`, `experiment_group`, `region`, `n_cells`, `proportion`, `genotype`, `treatment`. Each row represents the proportion of a specific cell type within a specific region and group.
-
-### Build the distribution matrix
-
-The distribution matrix is a cell-type × brain-region matrix showing the proportion of each cell type across all regions. This is the input for the distribution heatmap.
-
-```r
 dist_matrix <- cdst_distribution_matrix(merged, normalize = "row")
 ```
 
-The `normalize` argument controls how values are scaled: `"row"` normalizes each cell type across regions (shows spatial distribution), `"column"` normalizes each region across cell types (shows composition), and `"none"` returns raw counts.
-
-### Evaluate annotation quality
-
-Check how well your annotations perform at different confidence thresholds:
+Visualize cell proportions:
 
 ```r
-coverage <- cdst_annotation_coverage(merged, column_name = "cdst_nt_type")
-head(coverage)
+cdst_plot_proportions_standalone(
+  data = merged@meta.data,
+  celltype_col = "high_level_cell_type",
+  group_col = "experiment_group",
+  output_file = "cdst_output/figures/cell_proportions.png",
+  width = 10, height = 7
+)
 ```
+
+<p align="center">
+  <img src="man/figures/06_proportions_standalone.png" width="60%" alt="Cell Proportions"/>
+</p>
+
+### Disproportion analysis
+
+Quantify how cell type proportions shift between conditions:
+
+```r
+scores <- cdst_disproportion_scores(
+  data = merged@meta.data,
+  group1 = "AA SAL", group2 = "AA MOR",
+  group_col = "experiment_group",
+  celltype_col = "high_level_cell_type"
+)
+
+cdst_plot_disproportion(
+  data = merged@meta.data,
+  scores = scores,
+  x_col = "tSNE_1", y_col = "tSNE_2",
+  celltype_col = "high_level_cell_type",
+  title = "AA: SAL vs MOR",
+  output_file = "cdst_output/figures/disproportion_aa.png"
+)
+```
+
+<p align="center">
+  <img src="man/figures/02_disproportion_tsne.png" width="65%" alt="Disproportion t-SNE"/>
+</p>
 
 Save checkpoint:
 
@@ -531,45 +560,48 @@ saveRDS(list(proportions = proportions, dist_matrix = dist_matrix),
 
 ## 10. Step 7 — Differential Expression
 
-Inter-regional differential expression analysis identifies genes that are differentially expressed between experimental groups within each brain region. This captures spatially specific transcriptomic changes.
+Inter-regional differential expression analysis identifies genes that are differentially expressed between experimental groups within each brain region.
 
 ```r
 deg_results <- cdst_deg_interregional(merged, config, n_cores = 4)
 head(deg_results)
 ```
 
-The output is a data frame with columns: `gene`, `avg_log2FC`, `p_val`, `p_val_adj`, `pct.1`, `pct.2`, `contrast`, `region`. Each row is one gene tested in one region for one contrast.
-
-### Understanding the output
+### Volcano plot
 
 ```r
-# How many significant DEGs per contrast?
-deg_summary <- cdst_summarize_deg(deg_results, p_threshold = 0.05, logfc_threshold = 0.5)
-print(deg_summary)
-```
-
-The summary table shows, for each contrast and region, the number of upregulated and downregulated genes and the top genes by fold change.
-
-### Customizing contrasts
-
-By default, the function uses the comparisons defined in your YAML file. You can also pass explicit contrasts:
-
-```r
-deg_results <- cdst_deg_interregional(
-  merged, config,
-  contrasts = list(
-    c("AA SAL", "GG SAL"),
-    c("AA MOR", "GG MOR")
-  ),
-  min_cells_per_region = 50,
-  logfc_threshold = 0.25,
-  n_cores = 4
+cdst_plot_volcano(
+  deg_data = deg_results,
+  title = "AA SAL vs MOR",
+  logfc_threshold = 0.5,
+  pval_threshold = 0.05,
+  output_file = "cdst_output/figures/volcano_aa.png"
 )
 ```
 
-### Spatial GO enrichment
+<p align="center">
+  <img src="man/figures/06_volcano.png" width="60%" alt="Volcano Plot"/>
+</p>
 
-Test whether specific GO terms are spatially enriched or depleted between conditions:
+### GO enrichment comparison (2×2 design)
+
+Compare pathway enrichment between two conditions using the bidirectional weighted-score visualization:
+
+```r
+cdst_plot_enrichment_lollipop(
+  enrichment_A = enrichment_aa,
+  enrichment_B = enrichment_gg,
+  label_A = "AA MOR vs SAL",
+  label_B = "GG MOR vs SAL",
+  output_file = "cdst_output/figures/go_comparison.png"
+)
+```
+
+<p align="center">
+  <img src="man/figures/06_enrichment_lollipop.png" width="70%" alt="GO Enrichment Comparison"/>
+</p>
+
+### Spatial GO enrichment
 
 ```r
 enrichment <- cdst_spatial_enrichment(
@@ -577,8 +609,19 @@ enrichment <- cdst_spatial_enrichment(
   search_terms = c("synap", "dopamin", "opioid", "glutamat", "GABA"),
   organism = "mouse"
 )
-head(enrichment)
+
+cdst_plot_spatial_enrichment(
+  data = enrichment,
+  x_col = "AP_location", y_col = "DV_location",
+  score_col = "enrichment_score",
+  title = "Synaptic Transmission Enrichment",
+  output_file = "cdst_output/figures/spatial_enrichment.png"
+)
 ```
+
+<p align="center">
+  <img src="man/figures/04_spatial_enrichment.png" width="60%" alt="Spatial Enrichment"/>
+</p>
 
 Save checkpoint:
 
@@ -597,7 +640,6 @@ Weighted Gene Co-expression Network Analysis (WGCNA) identifies modules of co-ex
 ```r
 wgcna_data <- cdst_wgcna_prepare(merged, config, min_cells = 100)
 cat("Matrix dimensions:", dim(wgcna_data$datExpr), "\n")
-# Rows = region-group combinations, Columns = genes
 ```
 
 ### Step 8b: Detect co-expression modules
@@ -607,46 +649,70 @@ wgcna_result <- cdst_wgcna_detect(wgcna_data)
 table(wgcna_result$module_colors)
 ```
 
-The function automatically selects the soft-thresholding power by finding the lowest power where the scale-free topology fit R-squared exceeds 0.90. If you want to inspect the fit or override the power:
-
-```r
-# Manual power selection
-wgcna_result <- cdst_wgcna_detect(wgcna_data, power = 8)
-```
-
 ### Step 8c: Correlate modules with traits
 
 ```r
 trait_cor <- cdst_wgcna_trait_cor(wgcna_result)
+
+cdst_plot_trait_heatmap(
+  trait_data = trait_cor,
+  output_file = "cdst_output/figures/trait_heatmap.png"
+)
 ```
 
-This returns a list containing correlation matrices and p-value matrices for each trait type (genotype, treatment, region).
+<p align="center">
+  <img src="man/figures/06_trait_heatmap.png" width="55%" alt="Module-Trait Heatmap"/>
+</p>
 
-### Step 8d: Identify hub genes
-
-Hub genes are the most highly connected genes within each module, identified by their module membership (kME) score:
+### Step 8d: Identify hub genes and visualize networks
 
 ```r
 hub_genes <- cdst_wgcna_hub_genes(wgcna_result, n_hubs = 10, kme_threshold = 0.7)
-head(hub_genes)
+
+# Hub gene network (R-native)
+cdst_plot_network(
+  edges = hub_edges, nodes = hub_nodes,
+  hub_genes = hub_genes$gene,
+  title = "Brown Module Hub Network",
+  output_file = "cdst_output/figures/hub_network.png"
+)
 ```
 
-The output is a data frame with columns: `gene`, `module`, `kme`, `rank`.
+<p align="center">
+  <img src="man/figures/hub_network.png" width="55%" alt="Hub Gene Network"/>
+</p>
 
-### Step 8e: Module preservation (optional)
-
-Test whether modules are conserved across experimental groups:
+### Circos plot
 
 ```r
-preservation <- cdst_wgcna_preservation(wgcna_result, n_permutations = 200)
+cdst_plot_wgcna_circos(
+  module_data_csv = "module_enrichment.csv",
+  output_file = "cdst_output/figures/circos.png"
+)
 ```
 
-### Step 8f: Pathway enrichment (optional)
+<p align="center">
+  <img src="man/figures/circos.png" width="60%" alt="WGCNA Circos Plot"/>
+</p>
+
+### Atlas network
+
+Overlay co-expression networks on Allen Brain Atlas contours. Supports sagittal, coronal, and horizontal planes with configurable slice coordinates:
 
 ```r
-enrichment <- cdst_wgcna_pathway_enrich(wgcna_result, organism = "mouse")
-head(enrichment)
+cdst_plot_wgcna_network(
+  nodes_csv = "network_nodes.csv",
+  edges_csv = "network_edges.csv",
+  output_file = "cdst_output/figures/atlas_network.png",
+  plot_type = "atlas",
+  plane = "sagittal",   # or "coronal" or "horizontal"
+  slice = NULL           # NULL for automatic midpoint
+)
 ```
+
+<p align="center">
+  <img src="man/figures/atlas_network_sagittal.png" width="70%" alt="Atlas Network"/>
+</p>
 
 Save checkpoint:
 
@@ -660,83 +726,42 @@ saveRDS(list(wgcna_result = wgcna_result, trait_cor = trait_cor,
 
 ## 12. Step 9 — Visualization
 
-CellDynamicST provides 8 publication-quality plotting functions. All ggplot2-based plots can be further customized with standard ggplot2 syntax.
+CellDynamicST provides 25 publication-quality visualization functions. All ggplot2-based plots can be further customized with standard ggplot2 syntax. The complete gallery is shown in the [Visualization Gallery](#visualization-gallery) section above.
 
-### QC summary
-
-```r
-p <- cdst_plot_qc(merged)
-ggsave("cdst_output/figures/qc_summary.pdf", p, width = 15, height = 5)
-```
-
-### Spatial cell type map
+### Cell type hierarchy
 
 ```r
-p <- cdst_plot_spatial(merged, color_by = "cdst_cell_type")
-ggsave("cdst_output/figures/spatial_cell_types.pdf", p, width = 12, height = 10)
-
-# Faceted by experimental group
-p <- cdst_plot_spatial(merged, color_by = "cdst_nt_type",
-                       facet_by = "experiment_group", point_size = 0.2)
-ggsave("cdst_output/figures/spatial_nt_by_group.pdf", p, width = 20, height = 10)
-```
-
-### Cell type distribution heatmap
-
-```r
-pdf("cdst_output/figures/distribution_heatmap.pdf", width = 14, height = 10)
-cdst_plot_distribution_heatmap(dist_matrix)
-dev.off()
-```
-
-### Volcano plots
-
-```r
-p <- cdst_plot_volcano(deg_results, contrast = "treatment_AA",
-                       p_threshold = 0.05, logfc_threshold = 0.5, n_label = 20)
-ggsave("cdst_output/figures/volcano_treatment_AA.pdf", p, width = 8, height = 6)
-```
-
-### DEG scatter with functional groups
-
-```r
-functional_groups <- list(
-  Synaptic     = c("Syp", "Stxbp1", "Gabra1", "Gria1"),
-  Metabolism   = c("App", "Pfkm", "Ldhb"),
-  Ion_Channel  = c("Atp2a2", "Slc8a1", "Calb1"),
-  Opioid       = c("Oprm1", "Oprk1", "Oprd1", "Penk", "Pdyn")
+hierarchy <- cdst_build_hierarchy(
+  data = merged@meta.data,
+  levels = c("highest_level_cell_type", "high_level_cell_type",
+             "neurotransmitter_type", "cell_type_annotation"),
+  min_cells = 5
 )
 
-p <- cdst_plot_deg_scatter(deg_results, functional_groups = functional_groups)
-ggsave("cdst_output/figures/deg_scatter.pdf", p, width = 12, height = 8)
+cdst_plot_hierarchy_tree(
+  hierarchy_data = hierarchy,
+  output_file = "cdst_output/figures/hierarchy_alluvial.png",
+  width = 16, height = 10
+)
 ```
 
-### WGCNA module-trait heatmap
+<p align="center">
+  <img src="man/figures/01_hierarchy_tree.png" width="85%" alt="Hierarchy Alluvial"/>
+</p>
+
+### Multi-dimensional heatmap (Python backend)
 
 ```r
-pdf("cdst_output/figures/wgcna_trait_treatment.pdf", width = 10, height = 8)
-cdst_plot_trait_heatmap(trait_cor, trait_type = "treatment")
-dev.off()
-
-pdf("cdst_output/figures/wgcna_trait_genotype.pdf", width = 10, height = 8)
-cdst_plot_trait_heatmap(trait_cor, trait_type = "genotype")
-dev.off()
+cdst_plot_multidim_heatmap(
+  csv_path = "heatmap_input.csv",
+  output_file = "cdst_output/figures/multidim_heatmap.png",
+  title = "AA: MOR vs SAL"
+)
 ```
 
-### Gene co-expression network
-
-```r
-p <- cdst_plot_network(wgcna_result, hub_genes = hub_genes,
-                       module = "blue", min_cor = 0.3)
-ggsave("cdst_output/figures/network_blue.pdf", p, width = 10, height = 10)
-```
-
-### Spatial enrichment heatmap
-
-```r
-p <- cdst_plot_spatial_enrichment(enrichment, contrast = "treatment_AA")
-ggsave("cdst_output/figures/spatial_enrichment.pdf", p, width = 10, height = 8)
-```
+<p align="center">
+  <img src="man/figures/AA_MOR_vs_SAL_heatmap.png" width="75%" alt="Multi-Dim Heatmap"/>
+</p>
 
 ---
 
@@ -806,22 +831,24 @@ cdst_output/
 ├── cdst_result.rds                    # Complete CdstResult object
 ├── provenance.yaml                    # Full provenance log
 └── figures/
-    ├── qc_summary.pdf
-    ├── spatial_cell_types.pdf
-    ├── cell_proportions.pdf
+    ├── qc_summary.png
+    ├── spatial_cell_types.png
+    ├── cell_proportions.png
+    ├── hierarchy_alluvial.png
+    ├── hierarchy_sankey.html
+    ├── disproportion_*.png
     ├── heatmaps/
     │   ├── distribution_heatmap.png
     │   └── *_heatmap.png              # Multi-dim heatmaps per contrast
-    ├── hierarchy/
-    │   ├── hierarchy_tree.png
-    │   └── hierarchy_sankey.html
     ├── deg/
-    │   ├── volcano_*.pdf
-    │   └── ma_plot_*.png
+    │   ├── volcano_*.png
+    │   ├── ma_plot_*.png
+    │   └── go_comparison.png
     └── wgcna/
         ├── trait_heatmap.png
         ├── hub_network.png
-        └── circos.png
+        ├── circos.png
+        └── atlas_network.png
 ```
 
 Each checkpoint is a standalone `.rds` file that can be loaded independently. The `provenance.yaml` file records the exact package version, R version, timestamps, and parameters used at each step — ensuring full reproducibility.
@@ -866,32 +893,32 @@ Each checkpoint is a standalone `.rds` file that can be loaded independently. Th
 | `cdst_default_nt_criteria()` | Load default mouse NT criteria |
 | `cdst_default_glia_criteria()` | Load default mouse glial criteria |
 
-### Module 4: Visualization
+### Module 4: Visualization (25 functions)
 
 | Function | Purpose |
 |---|---|
 | `cdst_plot_spatial(obj, color_by)` | Spatial scatter plot |
 | `cdst_plot_spatial_feature(obj, gene)` | Spatial feature expression map |
 | `cdst_plot_distribution_heatmap(mat)` | Cell type × region heatmap (pheatmap) |
-| `cdst_plot_multidim_heatmap(deg, ...)` | Multi-dimensional heatmap (Python, circle encoding) |
+| `cdst_plot_multidim_heatmap(csv, ...)` | Multi-dimensional circle heatmap (Python) |
 | `cdst_plot_trait_heatmap(cor, type)` | WGCNA module-trait correlation heatmap |
 | `cdst_plot_volcano(deg, contrast)` | Volcano plot for DEG results |
 | `cdst_plot_deg_scatter(deg, contrast)` | MA-style DEG scatter plot |
-| `cdst_plot_network(hub_genes, ...)` | Hub gene network (R-native, igraph) |
-| `cdst_plot_wgcna_network(csv, ...)` | WGCNA network (Python, matplotlib) |
+| `cdst_plot_network(edges, nodes, ...)` | Hub gene network (R-native, igraph) |
+| `cdst_plot_wgcna_network(csv, ...)` | WGCNA atlas network (Python, AllenSDK) |
 | `cdst_plot_wgcna_circos(csv, ...)` | WGCNA circos plot (Python) |
 | `cdst_plot_wgcna_hub_network(csv, ...)` | Hub gene force-directed network (Python) |
 | `cdst_plot_proportions(proportions)` | Cell type proportions bar plot |
-| `cdst_plot_spatial_enrichment(enr)` | Spatial GO enrichment heatmap |
-| `cdst_plot_enrichment_lollipop(enr)` | GO enrichment lollipop plot |
-| `cdst_plot_enrichment_heatmap(enr)` | GO enrichment heatmap |
-| `cdst_plot_dendrogram(hierarchy)` | Brain region hierarchy dendrogram |
-| `cdst_plot_sankey(hierarchy)` | Brain region hierarchy Sankey diagram |
+| `cdst_plot_proportions_standalone(df)` | Proportions from data frame (no Seurat) |
+| `cdst_plot_spatial_enrichment(data)` | Spatial GO enrichment map |
+| `cdst_plot_enrichment_lollipop(A, B)` | Bidirectional GO comparison (2×2 design) |
+| `cdst_plot_enrichment_heatmap(mat)` | GO enrichment × region heatmap |
+| `cdst_plot_hierarchy_tree(hierarchy)` | Alluvial / Sankey flow diagram |
+| `cdst_plot_hierarchy_sankey(hierarchy)` | Interactive Sankey (HTML, networkD3) |
 | `cdst_plot_disproportion(scores)` | Disproportion t-SNE/UMAP plot |
 | `cdst_plot_reduction_panels(scores)` | Multi-panel disproportion reduction |
 | `cdst_plot_qc(obj)` | QC summary panels |
 | `cdst_plot_qc_standalone(metadata)` | QC summary from data frame (no Seurat) |
-| `cdst_plot_proportions_standalone(df)` | Proportions from data frame (no Seurat) |
 
 ### Module 5: Cell Dynamics
 
@@ -984,8 +1011,6 @@ This means the scale-free topology fit did not reach R-squared = 0.90 at any tes
 ```r
 wgcna_result <- cdst_wgcna_detect(wgcna_data, power = 6)
 ```
-
-Inspect the soft threshold plot to choose an appropriate value.
 
 ### Memory errors with large datasets
 
