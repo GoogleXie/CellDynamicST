@@ -1,0 +1,824 @@
+---
+title: "CellDynamicST: Complete Pipeline Walkthrough"
+subtitle: "End-to-end spatial transcriptomics analysis with the Oprm1 A118G dataset"
+author: "CellDynamicST Team"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    code_folding: show
+    theme: flatly
+    highlight: tango
+    fig_width: 12
+    fig_height: 8
+vignette: >
+  %\VignetteIndexEntry{Complete Pipeline Walkthrough}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  dpi = 150,
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Introduction
+
+**CellDynamicST** is an integrated R package for analyzing spatial transcriptomics
+data from MERFISH/CosMx experiments. It provides a complete pipeline from raw data
+ingestion through quality control, cell type classification, differential expression,
+co-expression network analysis (WGCNA), and publication-quality visualization.
+
+This notebook walks through the **entire pipeline** using a subset of the
+publicly available **Oprm1 A118G** spatial transcriptomics dataset
+(GEO: [GSE326553](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE326553)),
+which profiles ~950,000 cells across mouse brain sections from four experimental
+groups in a 2×2 factorial design (Genotype: AA/GG × Treatment: SAL/MOR).
+
+The subset included here contains **996 cells** sampled from all four slides,
+focusing on major brain regions. This is sufficient to demonstrate every analysis
+step and visualization function.
+
+## Experimental Design
+
+| Group    | Genotype | Treatment | Slides     |
+|----------|----------|-----------|------------|
+| AA SAL   | AA (WT)  | Saline    | Slide 1, 4 |
+| AA MOR   | AA (WT)  | Morphine  | Slide 1, 4 |
+| GG SAL   | GG (KI)  | Saline    | Slide 2, 3 |
+| GG MOR   | GG (KI)  | Morphine  | Slide 2, 3 |
+
+## Package Installation
+
+```{r install, eval=FALSE}
+# Install from GitHub
+devtools::install_github("GoogleXie/CellDynamicST", ref = "v1.1.0")
+
+# Or from a local tarball
+install.packages("CellDynamicST_1.1.0.tar.gz", repos = NULL, type = "source")
+```
+
+# Setup and Configuration
+
+## Load the Package
+
+```{r load-packages}
+# Source all package R files (for development; use library() for installed package)
+r_files <- sort(list.files(
+  file.path(system.file(package = "CellDynamicST"), "..", "CellDynamicST", "R"),
+  pattern = "\\.R$", full.names = TRUE
+))
+# If running from source directory:
+if (length(r_files) == 0) {
+  r_files <- sort(list.files("R", pattern = "\\.R$", full.names = TRUE))
+}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(dplyr)
+  library(pheatmap)
+})
+for (f in r_files) {
+  tryCatch(source(f, local = FALSE), error = function(e) {
+    message("Note: ", basename(f), " - ", e$message)
+  })
+}
+```
+
+## Load the Example Dataset
+
+The package ships with a 996-cell subset from the Oprm1 A118G experiment.
+This metadata table contains all the annotations produced by the full pipeline:
+cell type classifications, brain region assignments, neurotransmitter types,
+and spatial coordinates.
+
+```{r load-data}
+# Load the example metadata subset
+data_path <- system.file("extdata", "example_metadata_subset.csv",
+                         package = "CellDynamicST")
+if (data_path == "") {
+  # Fallback for running from source directory
+  data_path <- file.path("inst", "extdata", "example_metadata_subset.csv")
+}
+metadata <- read.csv(data_path, stringsAsFactors = FALSE)
+
+cat("Dataset dimensions:", nrow(metadata), "cells x", ncol(metadata), "columns\n")
+cat("Experiment groups:", paste(unique(metadata$experiment_group), collapse = ", "), "\n")
+cat("Brain regions:", paste(unique(metadata$level_3_parent_roi_acronym), collapse = ", "), "\n")
+cat("Cell types:", length(unique(metadata$high_level_cell_type)), "high-level types\n")
+```
+
+```{r data-summary}
+# Quick summary of the experimental design
+table(metadata$experiment_group, metadata$slide)
+```
+
+## Create a Configuration File
+
+For a full analysis, you would create a YAML configuration file. Here we
+demonstrate the structure:
+
+```{r config-template, eval=FALSE}
+# Generate a template configuration file
+cdst_create_config_template("my_experiment_config.yaml")
+
+# Then edit it to match your experiment:
+# - Set project name and species
+# - Define experimental groups (genotype × treatment)
+# - Point to your Seurat .rds files or CosMx directories
+# - Adjust QC thresholds and clustering parameters
+```
+
+For this walkthrough, we work directly with the pre-processed metadata,
+bypassing the Seurat-dependent steps (registration, QC, clustering) and
+focusing on the **analysis and visualization** modules.
+
+# Module 1: Data Registration (Overview)
+{#mod1}
+
+In a full pipeline run, `cdst_load_seurat()` reads your Seurat objects or
+CosMx directories, and `cdst_register_atlas()` maps each cell to the Allen
+Brain Atlas CCFv3 coordinate system.
+
+```{r mod1-overview, eval=FALSE}
+# Full pipeline usage (requires Seurat objects):
+config <- cdst_load_config("experiment_config.yaml")
+
+# Load and merge samples
+obj <- cdst_load_seurat("/path/to/slide1.rds", config)
+
+# Register to Allen Brain Atlas
+obj <- cdst_register_atlas(obj, config)
+```
+
+The registration step adds spatial coordinates (`AP_location`, `DV_location`,
+`ML_location`) and brain region annotations at multiple hierarchy levels
+(`level_3_parent_roi_acronym` through `level_7_parent_roi_acronym`) to each cell.
+
+Our example subset already has these columns:
+
+```{r mod1-check}
+# Verify atlas registration columns exist
+spatial_cols <- c("AP_location", "DV_location", "ML_location",
+                  "roi_acronym", "level_3_parent_roi_acronym")
+cat("Atlas columns present:", all(spatial_cols %in% colnames(metadata)), "\n")
+
+# Show spatial coordinate ranges
+cat("AP range:", range(metadata$AP_location, na.rm = TRUE), "\n")
+cat("DV range:", range(metadata$DV_location, na.rm = TRUE), "\n")
+cat("ML range:", range(metadata$ML_location, na.rm = TRUE), "\n")
+```
+
+# Module 2: Quality Control
+{#mod2}
+
+The QC module filters cells based on transcript counts, gene counts, and
+negative probe rates. In a full run:
+
+```{r mod2-overview, eval=FALSE}
+# Full pipeline usage:
+obj <- cdst_run_qc(obj, config)
+obj <- cdst_normalize(obj, config)
+obj <- cdst_find_variable_genes(obj, config)
+```
+
+## QC Visualization
+
+Even with pre-processed data, we can visualize QC metrics:
+
+```{r qc-plot, fig.width=14, fig.height=5}
+# Add genotype and treatment columns for the QC plot
+metadata$genotype <- ifelse(grepl("AA", metadata$experiment_group), "AA", "GG")
+metadata$treatment <- ifelse(grepl("MOR", metadata$experiment_group), "MOR", "SAL")
+
+cdst_plot_qc_standalone(
+  data = metadata,
+  group_col = "experiment_group",
+  count_col = "nCount_RNA",
+  feature_col = "nFeature_RNA",
+  output_file = "qc_summary.png",
+  width = 14, height = 5
+)
+```
+
+This three-panel figure shows:
+
+- **Left**: Distribution of transcripts per cell across experimental groups
+- **Center**: Distribution of genes detected per cell
+- **Right**: Scatter of genes vs. transcripts, colored by group
+
+These plots help identify batch effects and confirm that QC thresholds are appropriate.
+
+# Module 3: Cell Type Classification
+{#mod3}
+
+CellDynamicST uses a hierarchical classification approach:
+
+1. **Clustering** via Louvain on a PCA-reduced neighborhood graph
+2. **Neurotransmitter typing** based on marker gene expression
+3. **Glial subtyping** using canonical glial markers
+4. **Hierarchy annotation** building a multi-level cell type tree
+
+```{r mod3-overview, eval=FALSE}
+# Full pipeline usage:
+obj <- cdst_cluster(obj, config)
+obj <- cdst_classify_nt(obj, nt_col = "neurotransmitter_type")
+obj <- cdst_classify_glia(obj, glia_col = "high_level_cell_type")
+obj <- cdst_annotate_hierarchy(obj, config)
+```
+
+## Cell Type Distribution
+
+```{r celltype-summary}
+# High-level cell type distribution
+ct_table <- table(metadata$high_level_cell_type)
+ct_df <- data.frame(
+  cell_type = names(ct_table),
+  count = as.integer(ct_table)
+) %>% arrange(desc(count))
+knitr::kable(ct_df, caption = "High-level cell type counts in the subset")
+```
+
+## Cell Type Hierarchy Visualization
+
+The hierarchy captures the relationships between classification levels:
+highest-level (Neuronal/Glial/Other) → high-level cell type → neurotransmitter
+type → detailed annotation.
+
+### Alluvial / Sankey Diagram
+
+```{r hierarchy-sankey, fig.width=16, fig.height=10}
+# Build the hierarchy from metadata
+hierarchy <- cdst_build_hierarchy(
+  data = metadata,
+  levels = c("highest_level_cell_type", "high_level_cell_type",
+             "neurotransmitter_type", "cell_type_annotation"),
+  min_cells = 3
+)
+
+cat("Hierarchy:", nrow(hierarchy$nodes), "nodes,",
+    nrow(hierarchy$links), "links\n")
+
+# Plot as alluvial/Sankey flow diagram
+cdst_plot_hierarchy_tree(
+  hierarchy_data = hierarchy,
+  output_file = "hierarchy_alluvial.png",
+  width = 16, height = 10
+)
+```
+
+This alluvial diagram shows how cells flow from broad categories (left) to
+specific annotations (right), with band widths proportional to cell counts.
+Color coding distinguishes the three highest-level groups: Neuronal, Glial,
+and Other Cells.
+
+### Interactive Sankey (HTML)
+
+```{r hierarchy-interactive, eval=requireNamespace("networkD3", quietly=TRUE)}
+# Interactive version using networkD3
+cdst_plot_hierarchy_sankey(
+  hierarchy_data = hierarchy,
+  output_file = "hierarchy_sankey.html"
+)
+cat("Interactive Sankey saved to hierarchy_sankey.html\n")
+```
+
+# Module 4: Cell Proportions and Dynamics
+{#mod4}
+
+## Cell Proportions Across Groups
+
+```{r proportions, fig.width=10, fig.height=7}
+cdst_plot_proportions_standalone(
+  data = metadata,
+  celltype_col = "high_level_cell_type",
+  group_col = "experiment_group",
+  output_file = "cell_proportions.png",
+  width = 10, height = 7
+)
+```
+
+This stacked bar chart reveals how cell type composition varies across the
+four experimental groups. Differences in proportions between AA and GG genotypes,
+or between SAL and MOR treatments, may indicate genotype-dependent cellular
+responses to morphine.
+
+## Disproportion Analysis
+
+Disproportion scores quantify how cell type proportions shift between two
+conditions, expressed as z-scores. Positive values indicate enrichment in
+condition B; negative values indicate depletion.
+
+```{r disproportion-calc}
+# Calculate disproportion scores: AA SAL vs AA MOR
+scores_aa <- cdst_disproportion_scores(
+  data = metadata,
+  group1 = "AA SAL",
+  group2 = "AA MOR",
+  group_col = "experiment_group",
+  celltype_col = "high_level_cell_type",
+  min_cells = 3
+)
+
+knitr::kable(
+  scores_aa %>% arrange(desc(abs(zscore))) %>% head(10),
+  digits = 3,
+  caption = "Top disproportion scores: AA SAL vs AA MOR"
+)
+```
+
+### Disproportion on t-SNE
+
+```{r disproportion-tsne, fig.width=10, fig.height=8}
+# Add tSNE coordinates (using spatial coords as proxy for this demo)
+metadata$tSNE_1 <- metadata$AP_location * 3 + rnorm(nrow(metadata), 0, 0.5)
+metadata$tSNE_2 <- metadata$DV_location * 3 + rnorm(nrow(metadata), 0, 0.5)
+
+cdst_plot_disproportion(
+  data = metadata,
+  scores = scores_aa,
+  x_col = "tSNE_1",
+  y_col = "tSNE_2",
+  celltype_col = "high_level_cell_type",
+  title = "AA: SAL vs MOR",
+  output_file = "disproportion_tsne.png",
+  width = 10, height = 8
+)
+```
+
+Cells are colored by their disproportion z-score: **blue** indicates enrichment
+in SAL (depletion in MOR), **red** indicates enrichment in MOR. Labels at
+cell type centroids identify which populations are most affected.
+
+### Multi-Comparison Disproportion
+
+For a 2×2 design, we typically compare both genotypes:
+
+```{r disproportion-multi, fig.width=10, fig.height=8}
+# GG SAL vs GG MOR
+scores_gg <- cdst_disproportion_scores(
+  data = metadata,
+  group1 = "GG SAL",
+  group2 = "GG MOR",
+  group_col = "experiment_group",
+  celltype_col = "high_level_cell_type",
+  min_cells = 3
+)
+
+cdst_plot_disproportion(
+  data = metadata,
+  scores = scores_gg,
+  x_col = "tSNE_1", y_col = "tSNE_2",
+  celltype_col = "high_level_cell_type",
+  title = "GG: SAL vs MOR",
+  output_file = "disproportion_gg.png",
+  width = 10, height = 8
+)
+```
+
+Comparing the AA and GG disproportion maps reveals genotype-specific
+cellular responses to morphine treatment.
+
+# Module 5: Multi-Dimensional Heatmap
+{#mod5}
+
+The multi-dimensional heatmap is a signature visualization of CellDynamicST.
+It displays cell type × brain region interactions using:
+
+- **Circle size**: cell count
+- **Circle color**: percentage change between conditions
+- **Top margin**: stacked bars for cell type distribution
+- **Right margin**: stacked bars for neurotransmitter composition
+
+```{r multidim-heatmap-data}
+# Prepare the heatmap input CSV
+# This requires: cell_type, brain_region, group, count, pct_change columns
+heatmap_data <- metadata %>%
+  filter(experiment_group %in% c("AA SAL", "AA MOR")) %>%
+  group_by(high_level_cell_type, level_3_parent_roi_acronym, experiment_group) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = experiment_group,
+    values_from = count,
+    values_fill = 0
+  )
+
+# Calculate percentage change
+heatmap_data$pct_change <- ifelse(
+  heatmap_data$`AA SAL` > 0,
+  (heatmap_data$`AA MOR` - heatmap_data$`AA SAL`) / heatmap_data$`AA SAL` * 100,
+  0
+)
+
+# Write CSV for the Python-based heatmap
+write.csv(heatmap_data, "heatmap_input_aa.csv", row.names = FALSE)
+cat("Heatmap data:", nrow(heatmap_data), "cell type × region combinations\n")
+```
+
+```{r multidim-heatmap, eval=FALSE}
+# The multi-dimensional heatmap uses a Python backend
+# Requires: matplotlib, numpy, pandas
+cdst_plot_multidim_heatmap(
+  csv_path = "heatmap_input_aa.csv",
+  output_file = "multidim_heatmap_aa.png",
+  title = "AA: MOR vs SAL",
+  width = 14, height = 10
+)
+```
+
+# Module 6: Differential Expression Analysis
+{#mod6}
+
+## DEG Analysis (Overview)
+
+In a full run, `cdst_deg_interregional()` performs differential expression
+testing within each brain region for each pairwise comparison:
+
+```{r mod6-overview, eval=FALSE}
+# Full pipeline usage:
+deg_results <- cdst_deg_interregional(
+  obj, config,
+  contrasts = list(
+    c(group1 = "AA SAL", group2 = "AA MOR"),
+    c(group1 = "GG SAL", group2 = "GG MOR")
+  ),
+  region_column = "level_3_parent_roi_acronym",
+  min_cells_per_region = 30,
+  test_method = "wilcox",
+  logfc_threshold = 0.25
+)
+```
+
+## Volcano Plot
+
+The volcano plot shows the relationship between fold change and statistical
+significance for differentially expressed genes.
+
+```{r volcano, fig.width=10, fig.height=8}
+# Generate example DEG results for visualization
+set.seed(42)
+n_genes <- 500
+deg_data <- data.frame(
+  gene = paste0("Gene_", seq_len(n_genes)),
+  avg_log2FC = c(rnorm(200, -1.5, 0.8), rnorm(100, 0, 0.3), rnorm(200, 1.5, 0.8)),
+  p_val_adj = c(
+    10^(-runif(200, 2, 10)),
+    10^(-runif(100, 0, 1.5)),
+    10^(-runif(200, 2, 10))
+  ),
+  stringsAsFactors = FALSE
+)
+
+cdst_plot_volcano(
+  deg_data = deg_data,
+  title = "AA SAL vs MOR",
+  logfc_threshold = 0.5,
+  pval_threshold = 0.05,
+  output_file = "volcano_aa.png",
+  width = 10, height = 8
+)
+```
+
+Genes are colored by significance and direction: **blue** = significantly
+downregulated, **red** = significantly upregulated, **grey** = not significant.
+The top genes by significance are labeled.
+
+## GO Enrichment Comparison (2×2 Design)
+
+The bidirectional GO enrichment plot is specifically designed for 2×2 factorial
+experiments. It compares pathway enrichment between two conditions (e.g., AA vs GG)
+using a weighted score that combines fold change and significance.
+
+```{r go-enrichment, fig.width=12, fig.height=10}
+# Generate example GO enrichment data for two conditions
+set.seed(42)
+n_terms <- 15
+go_terms <- paste0("GO:", sprintf("%07d", sample(1:9999999, n_terms)),
+                   " ", c(
+  "synaptic transmission", "dopamine metabolic process",
+  "GABA signaling pathway", "glutamate receptor signaling",
+  "opioid receptor binding", "calcium ion transport",
+  "axon guidance", "myelination",
+  "neuroinflammation", "apoptotic process",
+  "protein phosphorylation", "ion channel activity",
+  "neurotransmitter transport", "cell adhesion",
+  "transcription regulation"
+))
+
+enrichment_A <- data.frame(
+  go_term = go_terms,
+  log2FC = rnorm(n_terms, 0.8, 0.5),
+  qvalue = 10^(-runif(n_terms, 1, 5)),
+  n_genes = sample(5:50, n_terms, replace = TRUE),
+  stringsAsFactors = FALSE
+)
+
+enrichment_B <- data.frame(
+  go_term = go_terms,
+  log2FC = rnorm(n_terms, -0.5, 0.6),
+  qvalue = 10^(-runif(n_terms, 0.5, 4)),
+  n_genes = sample(5:50, n_terms, replace = TRUE),
+  stringsAsFactors = FALSE
+)
+
+cdst_plot_enrichment_lollipop(
+  enrichment_A = enrichment_A,
+  enrichment_B = enrichment_B,
+  label_A = "AA MOR vs SAL",
+  label_B = "GG MOR vs SAL",
+  fc_col = "log2FC",
+  pval_col = "qvalue",
+  term_col = "go_term",
+  n_genes_col = "n_genes",
+  output_file = "go_enrichment_comparison.png",
+  width = 12, height = 10
+)
+```
+
+This plot shows:
+
+- **Central bars**: Direction and magnitude of the difference between conditions
+  (orange = condition A stronger, light blue = condition B stronger)
+- **Left dots**: Weighted enrichment score for condition A
+- **Right dots**: Weighted enrichment score for condition B
+- **Dot size**: Absolute log2 fold change
+- **Dot color**: Statistical significance (-log10 q-value)
+
+This design is optimized for identifying pathways that are differentially
+affected between genotypes in response to treatment.
+
+## Enrichment Heatmap
+
+```{r enrichment-heatmap, fig.width=10, fig.height=8}
+# Generate example enrichment scores across brain regions
+regions <- c("Isocortex", "HPF", "CTXsp", "STR", "HY", "MB")
+enrichment_matrix <- matrix(
+  rnorm(n_terms * length(regions), 0, 2),
+  nrow = n_terms, ncol = length(regions),
+  dimnames = list(
+    gsub("GO:\\d+ ", "", go_terms),
+    regions
+  )
+)
+
+cdst_plot_enrichment_heatmap(
+  enrichment_matrix = enrichment_matrix,
+  title = "GO Enrichment Across Brain Regions",
+  output_file = "enrichment_heatmap.png",
+  width = 10, height = 8
+)
+```
+
+The enrichment heatmap shows how GO term enrichment varies across brain
+regions, with hierarchical clustering revealing regional patterns.
+
+# Module 7: WGCNA Co-Expression Networks
+{#mod7}
+
+## WGCNA Pipeline (Overview)
+
+Weighted Gene Co-expression Network Analysis identifies modules of
+co-expressed genes and correlates them with experimental traits.
+
+```{r mod7-overview, eval=FALSE}
+# Full pipeline usage:
+wgcna_data <- cdst_wgcna_prepare(obj, config, min_cells = 100)
+wgcna_result <- cdst_wgcna_detect(wgcna_data, config)
+trait_cor <- cdst_wgcna_trait_cor(wgcna_result)
+hub_genes <- cdst_wgcna_hub_genes(wgcna_result, n_hubs = 10)
+```
+
+## Module-Trait Correlation Heatmap
+
+```{r trait-heatmap, fig.width=8, fig.height=6}
+# Generate example module-trait correlation data
+modules <- c("brown", "blue", "green", "turquoise", "red",
+             "yellow", "black", "pink")
+traits <- c("Treatment", "Genotype", "Interaction")
+
+trait_data <- data.frame(
+  module = rep(modules, each = length(traits)),
+  trait = rep(traits, times = length(modules)),
+  correlation = c(
+    0.82, 0.15, 0.45,   # brown
+    -0.71, 0.32, -0.28,  # blue
+    0.55, -0.68, 0.12,   # green
+    -0.45, 0.78, -0.55,  # turquoise
+    0.33, -0.22, 0.67,   # red
+    -0.18, 0.45, -0.33,  # yellow
+    0.62, -0.15, 0.28,   # black
+    -0.55, 0.38, -0.42   # pink
+  ),
+  p_value = c(
+    0.001, 0.35, 0.02,
+    0.003, 0.08, 0.12,
+    0.01, 0.001, 0.55,
+    0.02, 0.001, 0.01,
+    0.06, 0.22, 0.002,
+    0.35, 0.02, 0.06,
+    0.005, 0.42, 0.15,
+    0.01, 0.04, 0.03
+  ),
+  stringsAsFactors = FALSE
+)
+
+cdst_plot_trait_heatmap(
+  trait_data = trait_data,
+  output_file = "trait_heatmap.png",
+  width = 8, height = 6
+)
+```
+
+The module-trait heatmap shows the Pearson correlation between each WGCNA
+module eigengene and experimental traits. Significance is indicated by stars
+(* p < 0.05, ** p < 0.01, *** p < 0.001). Modules with strong treatment
+correlations are candidates for morphine-responsive gene programs.
+
+## Hub Gene Network
+
+```{r hub-network, fig.width=10, fig.height=10}
+# Generate example hub gene network data
+set.seed(42)
+hub_genes <- paste0("Hub_", LETTERS[1:3])
+neighbor_genes <- paste0("Gene_", 1:15)
+all_genes <- c(hub_genes, neighbor_genes)
+
+edges <- data.frame(
+  from = c(
+    rep(hub_genes[1], 6), rep(hub_genes[2], 5), rep(hub_genes[3], 4),
+    sample(neighbor_genes, 8, replace = TRUE)
+  ),
+  to = c(
+    sample(neighbor_genes, 6), sample(neighbor_genes, 5),
+    sample(neighbor_genes, 4), sample(neighbor_genes, 8)
+  ),
+  weight = runif(23, 0.3, 1.0),
+  stringsAsFactors = FALSE
+)
+edges <- edges[edges$from != edges$to, ]
+edges <- edges[!duplicated(paste(edges$from, edges$to)), ]
+
+nodes <- data.frame(
+  gene = all_genes,
+  is_hub = all_genes %in% hub_genes,
+  module = "brown",
+  kME = c(runif(3, 0.85, 0.99), runif(15, 0.3, 0.8)),
+  stringsAsFactors = FALSE
+)
+
+cdst_plot_network(
+  edges = edges,
+  nodes = nodes,
+  hub_genes = hub_genes,
+  title = "Brown Module Hub Network",
+  output_file = "hub_network.png",
+  width = 10, height = 10
+)
+```
+
+Hub genes (gold, larger) are the most connected nodes within a module.
+Their neighbors (light blue) represent co-expressed genes that may share
+regulatory mechanisms. Edge thickness reflects co-expression strength.
+
+## WGCNA Circos Plot
+
+```{r circos, eval=FALSE}
+# The circos plot uses a Python backend
+# Requires: matplotlib, numpy
+cdst_plot_wgcna_circos(
+  module_data_csv = "module_enrichment.csv",
+  output_file = "wgcna_circos.png",
+  width = 12, height = 12
+)
+```
+
+The circos plot displays multiple WGCNA modules as segments around a circle,
+with concentric rings showing different experimental comparisons (e.g.,
+OUD enrichment, AA MOR vs SAL, GG MOR vs SAL, genotype effects).
+
+## Atlas Network Visualization
+
+```{r atlas-network, eval=FALSE}
+# The atlas network overlays co-expression on Allen Brain Atlas contours
+# Supports sagittal, coronal, and horizontal planes
+cdst_plot_wgcna_network(
+  nodes_csv = "network_nodes.csv",
+  edges_csv = "network_edges.csv",
+  output_file = "atlas_network_sagittal.png",
+  plot_type = "atlas",
+  plane = "sagittal",   # or "coronal" or "horizontal"
+  slice = NULL,          # NULL for automatic midpoint
+  width = 12, height = 8
+)
+```
+
+The atlas network visualization places brain region nodes at their anatomical
+coordinates on a specific brain slice, with edges colored by module membership
+and weighted by co-expression strength. Users can configure the slice plane
+and coordinate in the YAML configuration file.
+
+# Module 8: Spatial Enrichment
+{#mod8}
+
+Spatial enrichment analysis maps Gene Ontology term enrichment scores onto
+spatial coordinates, revealing where specific biological processes are
+active or depleted.
+
+```{r spatial-enrichment, fig.width=10, fig.height=8}
+# Generate example spatial enrichment data
+set.seed(42)
+spatial_data <- metadata[, c("AP_location", "DV_location")]
+spatial_data$enrichment_score <- rnorm(nrow(metadata), 0, 1)
+# Make scores spatially structured
+spatial_data$enrichment_score <- spatial_data$enrichment_score +
+  0.5 * sin(spatial_data$AP_location) * cos(spatial_data$DV_location)
+
+cdst_plot_spatial_enrichment(
+  data = spatial_data,
+  x_col = "AP_location",
+  y_col = "DV_location",
+  score_col = "enrichment_score",
+  title = "Synaptic Transmission Enrichment (AA MOR)",
+  subtitle = "Midbrain",
+  output_file = "spatial_enrichment.png",
+  width = 10, height = 8
+)
+```
+
+Orange regions indicate spatial zones where the GO term is enriched;
+purple regions indicate depletion. This reveals the spatial heterogeneity
+of biological processes across brain tissue.
+
+# Running the Full Pipeline
+{#full-pipeline}
+
+For a complete end-to-end analysis, create a configuration file and call
+`cdst_run()`:
+
+```{r full-pipeline, eval=FALSE}
+# 1. Create and edit your configuration
+cdst_create_config_template("my_config.yaml")
+# Edit my_config.yaml with your experimental details...
+
+# 2. Run the full pipeline
+result <- cdst_run(
+  config_path = "my_config.yaml",
+  steps = c("register", "preprocess", "cluster",
+            "classify_nt", "classify_glia",
+            "dynamics", "deg", "wgcna", "visualize"),
+  output_dir = "cdst_output",
+  n_cores = 4,
+  verbose = TRUE
+)
+
+# 3. View summary
+cdst_summary(result)
+
+# 4. Access individual results
+seurat_obj <- result@seurat
+deg_results <- result@deg
+wgcna_results <- result@wgcna
+```
+
+The pipeline generates all manuscript-quality figures automatically in the
+`output_dir/figures/` directory.
+
+# Individual Visualization Functions
+{#viz-reference}
+
+All visualization functions can be called independently outside the pipeline.
+Here is a quick reference:
+
+| Function | Description | Input |
+|----------|-------------|-------|
+| `cdst_plot_qc_standalone()` | QC violin + scatter | metadata data.frame |
+| `cdst_plot_proportions_standalone()` | Stacked bar chart | metadata data.frame |
+| `cdst_plot_hierarchy_tree()` | Alluvial/Sankey flow | hierarchy list |
+| `cdst_plot_hierarchy_sankey()` | Interactive Sankey (HTML) | hierarchy list |
+| `cdst_plot_disproportion()` | Disproportion on t-SNE | metadata + scores |
+| `cdst_plot_multidim_heatmap()` | Circle heatmap (Python) | CSV path |
+| `cdst_plot_volcano()` | Volcano plot | DEG data.frame |
+| `cdst_plot_enrichment_lollipop()` | Bidirectional GO comparison | Two enrichment data.frames |
+| `cdst_plot_enrichment_heatmap()` | GO × region heatmap | enrichment matrix |
+| `cdst_plot_spatial_enrichment()` | Spatial enrichment map | spatial data.frame |
+| `cdst_plot_trait_heatmap()` | Module-trait correlation | trait data.frame |
+| `cdst_plot_network()` | Hub gene network (R) | edges + nodes data.frames |
+| `cdst_plot_wgcna_circos()` | Multi-ring circos (Python) | CSV path |
+| `cdst_plot_wgcna_network()` | Atlas network (Python) | CSV paths + plane config |
+| `cdst_plot_distribution_heatmap()` | Cell type × region heatmap | distribution matrix |
+| `cdst_plot_deg_scatter()` | MA plot | DEG data.frame |
+
+# Session Info
+
+```{r session-info}
+sessionInfo()
+```

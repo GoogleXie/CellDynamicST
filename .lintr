@@ -1,0 +1,5 @@
+linters: linters_with_defaults(
+    line_length_linter(120),
+    object_name_linter(styles = c("snake_case", "dotted.case", "camelCase")),
+    commented_code_linter = NULL
+  )

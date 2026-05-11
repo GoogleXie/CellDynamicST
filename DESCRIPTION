@@ -1,0 +1,85 @@
+Package: CellDynamicST
+Title: Spatial Transcriptomic Analysis of Cell Dynamics, Gene Expression, and Network Interactions
+Version: 1.0.0
+Authors@R: c(
+    person("First", "Last", email = "author@example.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0000-0000-0000"))
+    )
+Description: A comprehensive spatial transcriptomics analysis pipeline for studying
+    cell dynamics, gene expression, and network interactions. CellDynamicST implements
+    a reference-based generalized clustering algorithm with Random Forest label
+    propagation, neurotransmitter and glial cell classification via Gaussian Mixture
+    Models, hierarchical cell type annotation, spatial GO enrichment at single-cell
+    resolution, inter-regional weighted gene co-expression network analysis (WGCNA),
+    hub gene detection via ARACNe/minet, and atlas-projected visualization. The
+    package accepts any spatial transcriptomic dataset (CosMx, MERFISH, Visium) as a
+    Seurat object and is configured via a single YAML file specifying experimental
+    design, comparisons, and analysis parameters.
+License: GPL (>= 3)
+URL: https://github.com/username/CellDynamicST
+BugReports: https://github.com/username/CellDynamicST/issues
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1.0)
+Imports:
+    Seurat (>= 4.3.0),
+    SeuratObject,
+    dplyr,
+    tidyr,
+    ggplot2,
+    purrr,
+    tibble,
+    stringr,
+    readr,
+    yaml,
+    checkmate,
+    cli,
+    rlang,
+    methods,
+    stats,
+    utils,
+    grDevices,
+    Matrix,
+    matrixStats,
+    data.table,
+    randomForest,
+    mclust,
+    scales,
+    RColorBrewer,
+    viridis
+Suggests:
+    WGCNA,
+    igraph,
+    minet,
+    clusterProfiler,
+    fgsea,
+    enrichplot,
+    GO.db,
+    org.Mm.eg.db,
+    org.Hs.eg.db,
+    AnnotationDbi,
+    ComplexHeatmap,
+    circlize,
+    pheatmap,
+    ggraph,
+    networkD3,
+    htmlwidgets,
+    dendextend,
+    ggdendro,
+    ggrepel,
+    ggsankey,
+    reticulate,
+    BiocParallel,
+    future,
+    future.apply,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    covr,
+    lintr,
+    withr
+VignetteBuilder: knitr
+Config/testthat/edition: 3

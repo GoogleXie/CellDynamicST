@@ -1,0 +1,178 @@
+---
+title: "Configuration Guide"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Configuration Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+CellDynamicST uses a single YAML configuration file as the source of truth for
+every analysis. This design eliminates hardcoded paths, group names, and
+thresholds scattered across scripts, making analyses fully reproducible and
+portable across datasets.
+
+This vignette documents every configuration field, its purpose, and valid
+values.
+
+## Configuration Structure
+
+The configuration file has five top-level sections:
+
+| Section | Purpose |
+|---------|---------|
+| `project` | Project metadata (name, organism, atlas version) |
+| `samples` | Sample file paths and group assignments |
+| `design` | Experimental design: groups, genotype/treatment mappings |
+| `qc` | Quality control thresholds |
+| `clustering` | Clustering and annotation parameters |
+
+## Project Section
+
+```yaml
+project:
+  name: "Oprm1 A118G Spatial Transcriptomic Study"
+  organism: "mouse"          # "mouse" or "human"
+  atlas_version: "CCFv3"     # Allen Brain Atlas version
+  output_dir: "cdst_output"  # Default output directory
+```
+
+The `organism` field determines which gene annotation databases are used for GO
+enrichment and pathway analysis. Currently, `mouse` (using `org.Mm.eg.db`) and
+`human` (using `org.Hs.eg.db`) are supported.
+
+## Samples Section
+
+Each sample entry requires an `id`, a `path` to the Seurat `.rds` file, and a
+`group` assignment that matches one of the groups defined in the `design`
+section.
+
+```yaml
+samples:
+  - id: "mouse_01_AA_SAL"
+    path: "data/raw/mouse_01.rds"
+    group: "AA_SAL"
+    metadata:                    # Optional extra metadata
+      batch: "batch_1"
+      sex: "male"
+  - id: "mouse_02_GG_MOR"
+    path: "data/raw/mouse_02.rds"
+    group: "GG_MOR"
+```
+
+The `metadata` sub-section is optional and allows you to attach any additional
+sample-level information that will be propagated to the Seurat object's
+metadata during registration.
+
+## Design Section
+
+The design section defines the factorial structure of your experiment. The
+`genotype_map` and `treatment_map` dictionaries map each group name to its
+genotype and treatment level, respectively.
+
+```yaml
+design:
+  groups:
+    - "AA_SAL"
+    - "AA_MOR"
+    - "GG_SAL"
+    - "GG_MOR"
+  genotype_map:
+    AA_SAL: "AA"
+    AA_MOR: "AA"
+    GG_SAL: "GG"
+    GG_MOR: "GG"
+  treatment_map:
+    AA_SAL: "SAL"
+    AA_MOR: "MOR"
+    GG_SAL: "SAL"
+    GG_MOR: "MOR"
+  contrasts:                     # Optional: explicit contrasts
+    - ["AA_SAL", "GG_SAL"]
+    - ["AA_MOR", "GG_MOR"]
+    - ["AA_SAL", "AA_MOR"]
+    - ["GG_SAL", "GG_MOR"]
+```
+
+If `contrasts` is omitted, the pipeline automatically generates all pairwise
+comparisons from the `groups` list.
+
+## QC Section
+
+Quality control thresholds control cell filtering. All thresholds have sensible
+defaults that can be overridden.
+
+```yaml
+qc:
+  min_genes_per_cell: 200        # Minimum genes detected per cell
+  max_genes_per_cell: 10000      # Maximum genes (doublet filter)
+  min_counts_per_cell: 500       # Minimum UMI counts
+  max_counts_per_cell: 100000    # Maximum UMI counts
+  max_pct_mito: 20               # Maximum mitochondrial percentage
+  min_cells_per_gene: 10         # Minimum cells expressing a gene
+```
+
+## Clustering Section
+
+Parameters for dimensionality reduction, clustering, and cell type annotation.
+
+```yaml
+clustering:
+  n_variable_features: 3000      # Number of highly variable genes
+  n_pcs: 30                      # PCA dimensions to use
+  resolution: 0.8                # Louvain clustering resolution
+  algorithm: "louvain"           # "louvain", "leiden", or "slm"
+  annotation:
+    marker_genes_path: null      # Path to custom marker gene CSV
+    reference_path: null         # Path to reference Seurat object
+    rf_ntree: 500                # Random Forest trees for label transfer
+    rf_threshold: 0.6            # Minimum RF probability for assignment
+    nt_criteria_path: null       # Custom NT criteria YAML
+    glia_criteria_path: null     # Custom glia criteria YAML
+```
+
+## Loading and Validating Configuration
+
+```{r load}
+library(CellDynamicST)
+
+# Load and validate
+config <- cdst_load_config("experiment_config.yaml")
+
+# The config object is an S4 CdstConfig class
+print(config)
+
+# Access fields
+config@project_name
+config@groups
+config@design$genotype_map
+```
+
+Validation checks include: all sample paths exist, all groups in samples match
+the design, genotype/treatment maps cover all groups, and QC thresholds are
+within valid ranges.
+
+## Creating Configuration Programmatically
+
+```{r programmatic}
+# Start from template
+template_path <- system.file("templates", "experiment_config.yaml",
+                              package = "CellDynamicST")
+config_list <- yaml::read_yaml(template_path)
+
+# Modify
+config_list$project$name <- "My New Experiment"
+config_list$samples <- list(
+  list(id = "s1", path = "data/s1.rds", group = "WT_SAL"),
+  list(id = "s2", path = "data/s2.rds", group = "KO_MOR")
+)
+
+# Write
+yaml::write_yaml(config_list, "my_config.yaml")
+```

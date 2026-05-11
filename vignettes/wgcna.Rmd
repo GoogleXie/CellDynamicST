@@ -1,0 +1,178 @@
+---
+title: "WGCNA Network Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{WGCNA Network Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+CellDynamicST implements an **interregional** WGCNA workflow that identifies
+gene co-expression modules across brain regions and experimental conditions.
+Unlike standard WGCNA applied to individual cells, this approach aggregates
+expression at the region-group level, treating each unique brain region ×
+experimental group combination as a sample. This captures spatial patterns of
+gene co-regulation that are invisible at the single-cell level.
+
+## The WGCNA Workflow
+
+The complete WGCNA workflow consists of five sequential steps:
+
+| Step | Function | Purpose |
+|------|----------|---------|
+| 1. Prepare | `cdst_wgcna_prepare()` | Build region × gene matrix |
+| 2. Detect | `cdst_wgcna_detect()` | Module identification |
+| 3. Correlate | `cdst_wgcna_trait_cor()` | Module-trait associations |
+| 4. Hub Genes | `cdst_wgcna_hub_genes()` | Identify hub genes per module |
+| 5. Preserve | `cdst_wgcna_preservation()` | Cross-group preservation |
+
+An optional sixth step performs pathway enrichment on each module.
+
+## Step 1: Prepare the Expression Matrix
+
+The preparation step constructs a region-by-gene average expression matrix.
+Each row represents a unique combination of brain region and experimental
+group (e.g., "CA1_WT_SAL"), and each column represents a gene. Regions with
+fewer than `min_cells` cells are excluded to ensure reliable averages.
+
+```{r prepare}
+library(CellDynamicST)
+
+config <- cdst_load_config("config.yaml")
+wgcna_data <- cdst_wgcna_prepare(obj, config, min_cells = 100)
+
+# Inspect dimensions
+dim(wgcna_data$datExpr)  # rows = region-groups, cols = genes
+head(wgcna_data$traits_df)
+```
+
+## Step 2: Module Detection
+
+Module detection uses the standard WGCNA blockwiseModules algorithm with
+automatic soft threshold selection. The function returns the complete network
+object, module assignments, and module eigengenes.
+
+```{r detect}
+wgcna_result <- cdst_wgcna_detect(
+  wgcna_data,
+  power = NULL,           # Auto-select (recommended)
+  min_module_size = 20,
+  deep_split = 3,
+  merge_cut_height = 0.10
+)
+
+# Module summary
+table(wgcna_result$module_colors)
+```
+
+### Manual Power Selection
+
+If automatic power selection fails or you want to inspect the scale-free
+topology fit, you can examine the soft threshold analysis:
+
+```{r power}
+sft <- wgcna_result$sft
+
+# Plot scale-free topology fit
+plot(sft$fitIndices[, 1],
+     -sign(sft$fitIndices[, 3]) * sft$fitIndices[, 2],
+     xlab = "Soft Threshold (power)",
+     ylab = "Scale Free Topology Model Fit (signed R²)",
+     type = "n")
+text(sft$fitIndices[, 1],
+     -sign(sft$fitIndices[, 3]) * sft$fitIndices[, 2],
+     labels = sft$fitIndices[, 1], cex = 0.9, col = "red")
+abline(h = 0.90, col = "red", lty = 2)
+
+# Re-run with manual power
+wgcna_result <- cdst_wgcna_detect(wgcna_data, power = 8)
+```
+
+## Step 3: Module-Trait Correlations
+
+This step computes Pearson correlations between module eigengenes and
+experimental traits (genotype, treatment, brain region). The resulting
+correlation and p-value matrices are used for heatmap visualization.
+
+```{r trait}
+trait_cor <- cdst_wgcna_trait_cor(wgcna_result)
+
+# Visualize
+cdst_plot_trait_heatmap(trait_cor, trait_type = "treatment")
+cdst_plot_trait_heatmap(trait_cor, trait_type = "genotype")
+cdst_plot_trait_heatmap(trait_cor, trait_type = "region")
+```
+
+## Step 4: Hub Gene Identification
+
+Hub genes are the most highly connected genes within each module, identified
+by their module membership (kME) score. These genes are the strongest
+candidates for driving the biological processes captured by each module.
+
+```{r hubs}
+hub_genes <- cdst_wgcna_hub_genes(
+  wgcna_result,
+  n_hubs = 10,
+  kme_threshold = 0.7
+)
+
+head(hub_genes)
+
+# Visualize network with hub genes highlighted
+cdst_plot_network(wgcna_result, hub_genes = hub_genes, module = "blue")
+```
+
+## Step 5: Module Preservation
+
+Module preservation analysis tests whether modules detected in one
+experimental group are conserved in other groups. High preservation indicates
+robust, biologically meaningful modules; low preservation may indicate
+condition-specific gene regulation.
+
+```{r preserve}
+preservation <- cdst_wgcna_preservation(
+  wgcna_result,
+  n_permutations = 200
+)
+```
+
+## Optional: Pathway Enrichment
+
+Perform GO biological process enrichment on each module to understand the
+biological functions captured by the co-expression patterns.
+
+```{r enrich}
+enrichment <- cdst_wgcna_pathway_enrich(
+  wgcna_result,
+  organism = "mouse",
+  p_cutoff = 0.05
+)
+
+head(enrichment)
+```
+
+## Complete Example
+
+```{r complete}
+library(CellDynamicST)
+
+config <- cdst_load_config("config.yaml")
+
+# Full WGCNA pipeline
+wgcna_data   <- cdst_wgcna_prepare(obj, config)
+wgcna_result <- cdst_wgcna_detect(wgcna_data)
+trait_cor    <- cdst_wgcna_trait_cor(wgcna_result)
+hub_genes    <- cdst_wgcna_hub_genes(wgcna_result)
+enrichment   <- cdst_wgcna_pathway_enrich(wgcna_result)
+
+# Generate all WGCNA figures
+cdst_plot_trait_heatmap(trait_cor, trait_type = "treatment")
+cdst_plot_trait_heatmap(trait_cor, trait_type = "genotype")
+cdst_plot_network(wgcna_result, hub_genes = hub_genes, module = "blue")
+```

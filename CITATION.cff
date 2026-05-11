@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "CellDynamicST: Spatial Transcriptomic Analysis of Cell Dynamics"
+version: 1.0.0
+date-released: "2026-01-01"
+url: "https://github.com/username/CellDynamicST"
+repository-code: "https://github.com/username/CellDynamicST"
+license: GPL-3.0
+authors:
+  - family-names: "Last"
+    given-names: "First"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+keywords:
+  - spatial transcriptomics
+  - single-cell analysis
+  - cell type annotation
+  - WGCNA
+  - brain atlas
+  - neuroscience
+  - R package

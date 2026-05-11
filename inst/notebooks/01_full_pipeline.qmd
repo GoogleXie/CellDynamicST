@@ -1,0 +1,198 @@
+---
+title: "CellDynamicST: Full Pipeline Analysis Notebook"
+author: "CellDynamicST Team"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
+    theme: cosmo
+    self-contained: true
+params:
+  config_path: "experiment_config.yaml"
+  output_dir: "cdst_output"
+  n_cores: 4
+  steps: "all"
+execute:
+  warning: false
+  message: false
+---
+
+## About This Notebook
+
+This parameterized Quarto notebook runs the complete CellDynamicST pipeline on
+your spatial transcriptomic data. To use it with your own data, edit the `params`
+block above to point to your configuration file and desired output directory,
+then render the notebook.
+
+```bash
+# Render from the command line
+quarto render 01_full_pipeline.qmd \
+  -P config_path:my_config.yaml \
+  -P output_dir:my_output \
+  -P n_cores:8
+```
+
+## Setup
+
+```{r setup}
+library(CellDynamicST)
+library(ggplot2)
+library(dplyr)
+
+config_path <- params$config_path
+output_dir <- params$output_dir
+n_cores <- params$n_cores
+
+cat("Configuration:", config_path, "\n")
+cat("Output directory:", output_dir, "\n")
+cat("Cores:", n_cores, "\n")
+```
+
+## Load Configuration
+
+```{r config}
+config <- cdst_load_config(config_path)
+print(config)
+```
+
+## Step 1: Data Registration
+
+```{r register}
+samples <- cdst_register_samples(config)
+merged <- cdst_merge_samples(samples, config)
+cat("Total cells after merge:", ncol(merged), "\n")
+```
+
+## Step 2: Quality Control & Normalization
+
+```{r preprocess}
+merged <- cdst_qc_filter(merged, config)
+cat("Cells after QC:", ncol(merged), "\n")
+
+merged <- cdst_normalize(merged, config)
+```
+
+### QC Visualization
+
+```{r qc-plot, fig.width=15, fig.height=5}
+cdst_plot_qc(merged)
+```
+
+## Step 3: Clustering
+
+```{r cluster}
+merged <- cdst_cluster(merged, config)
+cat("Clusters found:", length(unique(merged$cdst_cluster)), "\n")
+```
+
+## Step 4: Cell Type Annotation
+
+```{r annotate}
+merged <- cdst_annotate_cell_types(merged, config)
+cat("Cell types:", length(unique(merged$cdst_cell_type)), "\n")
+table(merged$cdst_cell_type)
+```
+
+### Spatial Cell Type Map
+
+```{r spatial-ct, fig.width=12, fig.height=10}
+cdst_plot_spatial(merged, color_by = "cdst_cell_type")
+```
+
+## Step 5: Neurotransmitter Classification
+
+```{r nt}
+merged <- cdst_classify_nt(merged, config)
+table(merged$cdst_nt_type)
+```
+
+```{r spatial-nt, fig.width=12, fig.height=10}
+cdst_plot_spatial(merged, color_by = "cdst_nt_type")
+```
+
+## Step 6: Glial Subtype Classification
+
+```{r glia}
+merged <- cdst_classify_glia(merged, config)
+table(merged$cdst_glia_type, useNA = "ifany")
+```
+
+## Step 7: Cell Dynamics
+
+```{r dynamics}
+proportions <- cdst_cell_proportions(merged, config)
+dist_matrix <- cdst_distribution_matrix(merged)
+```
+
+### Distribution Heatmap
+
+```{r dist-heatmap, fig.width=14, fig.height=10}
+cdst_plot_distribution_heatmap(dist_matrix)
+```
+
+## Step 8: Differential Expression
+
+```{r deg}
+deg_results <- cdst_deg_interregional(merged, config, n_cores = n_cores)
+deg_summary <- cdst_summarize_deg(deg_results)
+knitr::kable(head(deg_summary, 20), caption = "Top DEG Summary by Region")
+```
+
+### Volcano Plots
+
+```{r volcano, fig.width=8, fig.height=6}
+contrasts <- unique(deg_results$contrast)
+for (ct in contrasts[1:min(4, length(contrasts))]) {
+  p <- cdst_plot_volcano(deg_results, contrast = ct, title = ct)
+  print(p)
+}
+```
+
+## Step 9: WGCNA Network Analysis
+
+```{r wgcna}
+wgcna_data <- cdst_wgcna_prepare(merged, config)
+wgcna_result <- cdst_wgcna_detect(wgcna_data)
+trait_cor <- cdst_wgcna_trait_cor(wgcna_result)
+hub_genes <- cdst_wgcna_hub_genes(wgcna_result)
+
+knitr::kable(head(hub_genes, 20), caption = "Top Hub Genes")
+```
+
+### Module-Trait Correlations
+
+```{r trait-heatmap, fig.width=10, fig.height=8}
+cdst_plot_trait_heatmap(trait_cor, trait_type = "treatment")
+```
+
+## Step 10: Save Results
+
+```{r save}
+# Save the complete result
+result <- new("CdstResult",
+  config = config,
+  seurat = merged,
+  deg = deg_results,
+  dynamics = list(proportions = proportions, distribution_matrix = dist_matrix),
+  wgcna = list(wgcna_result = wgcna_result, trait_correlations = trait_cor,
+               hub_genes = hub_genes),
+  provenance = list(
+    notebook = "01_full_pipeline.qmd",
+    timestamp = as.character(Sys.time()),
+    package_version = as.character(packageVersion("CellDynamicST"))
+  )
+)
+
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+saveRDS(result, file.path(output_dir, "cdst_result.rds"))
+cat("Results saved to:", output_dir, "\n")
+```
+
+## Session Info
+
+```{r session}
+sessionInfo()
+```

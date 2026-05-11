@@ -1,0 +1,217 @@
+---
+title: "Quick Start Guide"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Quick Start Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+CellDynamicST is a comprehensive R package for analyzing spatial transcriptomic
+data with a focus on cell dynamics, neurotransmitter classification, and gene
+co-expression network analysis. The package implements an 8-module pipeline that
+takes raw MERFISH/Visium/MERSCOPE data through quality control, cell type
+annotation, differential expression, and weighted gene co-expression network
+analysis (WGCNA).
+
+This vignette walks through a minimal end-to-end analysis using the package's
+pipeline orchestrator.
+
+## Installation
+
+```{r install}
+# Install from GitHub
+remotes::install_github("YourLab/CellDynamicST")
+
+# Or with all suggested dependencies
+remotes::install_github("YourLab/CellDynamicST", dependencies = TRUE)
+```
+
+## Step 1: Prepare Your Configuration
+
+Every CellDynamicST analysis begins with a YAML configuration file that
+describes your experimental design. Copy the template and edit it for your
+experiment:
+
+```{r config}
+library(CellDynamicST)
+
+# Copy the template to your working directory
+file.copy(
+  system.file("templates", "experiment_config.yaml", package = "CellDynamicST"),
+  "my_experiment_config.yaml"
+)
+```
+
+Edit `my_experiment_config.yaml` to specify your sample paths, experimental
+groups, genotype/treatment mappings, and brain region hierarchy. The
+configuration file is the single source of truth for all downstream analyses.
+
+Here is a minimal example:
+
+```yaml
+project:
+  name: "My Spatial Experiment"
+  organism: "mouse"
+
+samples:
+  - id: "sample_01"
+    path: "data/sample_01.rds"
+    group: "WT_SAL"
+  - id: "sample_02"
+    path: "data/sample_02.rds"
+    group: "WT_MOR"
+
+design:
+  groups: ["WT_SAL", "WT_MOR", "KO_SAL", "KO_MOR"]
+  genotype_map:
+    WT_SAL: "WT"
+    WT_MOR: "WT"
+    KO_SAL: "KO"
+    KO_MOR: "KO"
+  treatment_map:
+    WT_SAL: "SAL"
+    WT_MOR: "MOR"
+    KO_SAL: "SAL"
+    KO_MOR: "MOR"
+```
+
+## Step 2: Run the Full Pipeline
+
+The simplest way to run the entire analysis is with `cdst_run()`:
+
+```{r run}
+result <- cdst_run(
+  config_path = "my_experiment_config.yaml",
+  output_dir = "cdst_output",
+  n_cores = 4,
+  verbose = TRUE
+)
+```
+
+This executes all 10 pipeline steps in sequence:
+
+1. **Register** — Load samples and standardize metadata
+2. **Preprocess** — QC filtering and SCTransform normalization
+3. **Cluster** — PCA, UMAP, and Louvain clustering
+4. **Annotate** — Marker-based cell type annotation
+5. **Classify NT** — Neurotransmitter type classification
+6. **Classify Glia** — Glial subtype classification via GMM
+7. **Dynamics** — Cell type proportion analysis
+8. **DEG** — Interregional differential expression
+9. **WGCNA** — Gene co-expression network analysis
+10. **Visualize** — Generate all publication figures
+
+Each step saves a checkpoint `.rds` file, so you can resume from any point.
+
+## Step 3: Run Individual Steps
+
+You can also run specific steps:
+
+```{r steps}
+# Only run preprocessing and clustering
+result <- cdst_run(
+  "my_experiment_config.yaml",
+  steps = c("register", "preprocess", "cluster"),
+  output_dir = "cdst_output"
+)
+
+# Later, resume with annotation and downstream
+result <- cdst_run(
+  "my_experiment_config.yaml",
+  steps = c("annotate", "classify_nt", "deg", "wgcna"),
+  output_dir = "cdst_output"
+)
+```
+
+## Step 4: Use Individual Functions
+
+For fine-grained control, call module functions directly:
+
+```{r individual}
+config <- cdst_load_config("my_experiment_config.yaml")
+
+# Load and register
+samples <- cdst_register_samples(config)
+merged <- cdst_merge_samples(samples, config)
+
+# QC and normalize
+merged <- cdst_qc_filter(merged, config)
+merged <- cdst_normalize(merged, config)
+
+# Cluster
+merged <- cdst_cluster(merged, config, resolution = 0.8)
+
+# Annotate
+merged <- cdst_annotate_cell_types(merged, config)
+merged <- cdst_classify_nt(merged, config)
+
+# Visualize
+cdst_plot_spatial(merged, color_by = "cdst_cell_type")
+cdst_plot_qc(merged)
+```
+
+## Step 5: Explore Results
+
+```{r results}
+# Print summary
+cdst_summary(result)
+
+# Access the annotated Seurat object
+seurat_obj <- result@seurat
+
+# Access DEG results
+deg_table <- result@deg
+head(deg_table)
+
+# Access WGCNA results
+hub_genes <- result@wgcna$hub_genes
+head(hub_genes)
+
+# Check provenance
+cat(yaml::as.yaml(result@provenance))
+```
+
+## Output Structure
+
+After a full pipeline run, the output directory contains:
+
+```
+cdst_output/
+├── checkpoint_01_registered.rds
+├── checkpoint_02_preprocessed.rds
+├── checkpoint_03_clustered.rds
+├── checkpoint_04_annotated.rds
+├── checkpoint_05_nt_classified.rds
+├── checkpoint_06_glia_classified.rds
+├── checkpoint_07_dynamics.rds
+├── checkpoint_08_deg.rds
+├── checkpoint_09_wgcna.rds
+├── cdst_result.rds
+├── provenance.yaml
+└── figures/
+    ├── qc_summary.pdf
+    ├── spatial_cell_types.pdf
+    ├── distribution_heatmap.pdf
+    ├── volcano_*.pdf
+    └── wgcna_trait_heatmap.pdf
+```
+
+## Next Steps
+
+For more detailed guides, see:
+
+- `vignette("configuration")` — Full configuration reference
+- `vignette("cell-typing")` — Cell type annotation deep dive
+- `vignette("wgcna")` — WGCNA network analysis guide
+- `vignette("visualization-gallery")` — All available plot types

@@ -1,0 +1,65 @@
+# =============================================================================
+# Default Glial Cell Classification Criteria (Mouse Brain)
+# =============================================================================
+# Each glial type is defined by marker genes. Classification uses a dual-module
+# Gaussian Mixture Model (GMM) to determine expression thresholds, with a
+# minimum fraction criterion applied at the cluster level.
+#
+# Based on: CellDynamicST paper, annotate_glia_type.R
+# =============================================================================
+
+threshold: 3.0          # log2CPM expression threshold (initial)
+min_fraction: 0.30      # Minimum fraction of cluster cells expressing marker
+use_gmm: true           # Use GMM for adaptive thresholding
+
+glial_types:
+  - name: "Astrocyte"
+    abbreviation: "Astro"
+    markers:
+      - "Aqp4"        # Aquaporin 4
+      - "Gfap"        # Glial fibrillary acidic protein
+      - "Aldh1l1"     # Aldehyde dehydrogenase
+      - "S100b"       # S100 calcium-binding protein B
+      - "Slc1a3"      # GLAST (glutamate transporter)
+
+  - name: "Microglia"
+    abbreviation: "Micro"
+    markers:
+      - "Cx3cr1"      # Fractalkine receptor
+      - "P2ry12"      # Purinergic receptor
+      - "Tmem119"     # Transmembrane protein 119
+      - "Itgam"       # CD11b
+      - "Aif1"        # Iba1
+
+  - name: "Oligodendrocyte"
+    abbreviation: "Oligo"
+    markers:
+      - "Mbp"         # Myelin basic protein
+      - "Plp1"        # Proteolipid protein 1
+      - "Mog"         # Myelin oligodendrocyte glycoprotein
+      - "Mag"         # Myelin-associated glycoprotein
+
+  - name: "OPC"
+    abbreviation: "OPC"
+    markers:
+      - "Pdgfra"      # PDGF receptor alpha
+      - "Cspg4"       # NG2
+
+  - name: "Ependymal"
+    abbreviation: "Epen"
+    markers:
+      - "Foxj1"       # Forkhead box J1
+      - "Tmem212"     # Transmembrane protein 212
+
+  - name: "Endothelial"
+    abbreviation: "Endo"
+    markers:
+      - "Cldn5"       # Claudin 5
+      - "Pecam1"      # CD31
+      - "Flt1"        # VEGF receptor 1
+
+  - name: "Pericyte"
+    abbreviation: "Peri"
+    markers:
+      - "Pdgfrb"      # PDGF receptor beta
+      - "Rgs5"        # Regulator of G-protein signaling 5

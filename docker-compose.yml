@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  celldynamicst:
+    build: .
+    container_name: celldynamicst
+    ports:
+      - "8787:8787"
+    environment:
+      - DISABLE_AUTH=true
+      - ROOT=TRUE
+    volumes:
+      - ./data:/home/rstudio/data
+      - ./output:/home/rstudio/output
+    restart: unless-stopped

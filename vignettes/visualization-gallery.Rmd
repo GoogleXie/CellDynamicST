@@ -1,0 +1,181 @@
+---
+title: "Visualization Gallery"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Visualization Gallery}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+CellDynamicST provides a suite of publication-quality visualization functions
+that follow a consistent design language. All plotting functions return ggplot2
+objects (or pheatmap objects for heatmaps) and use the `cdst_theme_publication()`
+theme for consistent styling.
+
+This vignette showcases every available plot type with example code.
+
+## Theme and Palette
+
+All plots use a shared publication theme and color palette:
+
+```{r theme}
+library(CellDynamicST)
+library(ggplot2)
+
+# The publication theme
+p <- ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  cdst_theme_publication()
+
+# Access the default palette
+colors <- cdst_palette(8)
+print(colors)
+```
+
+## QC Summary (`cdst_plot_qc`)
+
+A multi-panel figure showing transcript counts, gene counts, and their
+relationship across experimental groups. Essential for evaluating data quality
+before downstream analysis.
+
+```{r qc}
+cdst_plot_qc(seurat_obj, group_by = "experiment_group")
+```
+
+## Spatial Cell Type Map (`cdst_plot_spatial`)
+
+Scatter plot of cells at their spatial coordinates, colored by any metadata
+column. Supports faceting by experimental group for side-by-side comparisons.
+
+```{r spatial}
+# Basic spatial map
+cdst_plot_spatial(obj, color_by = "cdst_cell_type")
+
+# Faceted by group
+cdst_plot_spatial(obj, color_by = "cdst_nt_type",
+                  facet_by = "experiment_group",
+                  point_size = 0.2)
+
+# Custom palette
+my_colors <- c("Glutamatergic" = "#E41A1C", "GABAergic" = "#377EB8",
+               "Cholinergic" = "#4DAF4A", "Dopaminergic" = "#984EA3")
+cdst_plot_spatial(obj, color_by = "cdst_nt_type", palette = my_colors)
+```
+
+## Cell Type Distribution Heatmap (`cdst_plot_distribution_heatmap`)
+
+Heatmap showing the proportion of each cell type across brain regions, with
+hierarchical annotations for parent regions and cell type superclasses.
+
+```{r dist_heatmap}
+dist <- cdst_distribution_matrix(obj, normalize = "row")
+cdst_plot_distribution_heatmap(dist,
+  color_scale = "viridis",
+  title = "Cell Type Distribution Across Brain Regions")
+```
+
+## Volcano Plot (`cdst_plot_volcano`)
+
+Standard volcano plot for differential expression results, with configurable
+significance thresholds and automatic labeling of top genes.
+
+```{r volcano}
+cdst_plot_volcano(deg_results,
+  contrast = "WT_SAL vs WT_MOR",
+  p_threshold = 0.05,
+  logfc_threshold = 0.5,
+  n_label = 20)
+```
+
+## DEG Scatter with Displacement (`cdst_plot_deg_scatter`)
+
+Scatter plot showing DEGs per brain region with gene-level points displaced
+by fold change. Supports functional group coloring for biological
+interpretation.
+
+```{r deg_scatter}
+functional_groups <- list(
+  Synaptic = c("Syp", "Stxbp1", "Gabra1"),
+  Metabolism = c("App", "Pfkm", "Ldhb"),
+  Ion_Transport = c("Atp2a2", "Slc8a1", "Calb1")
+)
+
+cdst_plot_deg_scatter(deg_results,
+  functional_groups = functional_groups,
+  title = "DEGs by Region and Functional Group")
+```
+
+## WGCNA Module-Trait Heatmap (`cdst_plot_trait_heatmap`)
+
+Correlation heatmap between WGCNA module eigengenes and experimental traits,
+with significance stars and diverging color scale.
+
+```{r trait_heatmap}
+cdst_plot_trait_heatmap(trait_cor, trait_type = "treatment")
+cdst_plot_trait_heatmap(trait_cor, trait_type = "genotype")
+cdst_plot_trait_heatmap(trait_cor, trait_type = "region")
+```
+
+## Gene Co-expression Network (`cdst_plot_network`)
+
+Interactive network visualization of gene co-expression, with nodes colored
+by WGCNA module and hub genes highlighted with larger size and labels.
+
+```{r network}
+# Single module
+cdst_plot_network(wgcna_result,
+  hub_genes = hub_genes,
+  module = "blue",
+  min_cor = 0.3)
+
+# All modules
+cdst_plot_network(wgcna_result,
+  hub_genes = hub_genes,
+  min_cor = 0.4)
+```
+
+## Spatial Enrichment Heatmap (`cdst_plot_spatial_enrichment`)
+
+Heatmap of GO-term enrichment scores across brain regions, showing which
+biological processes are spatially enriched or depleted between conditions.
+
+```{r spatial_enrich}
+cdst_plot_spatial_enrichment(enrichment_results,
+  contrast = "WT_SAL vs WT_MOR",
+  title = "Spatial GO Enrichment: Treatment Effect")
+```
+
+## Saving Figures
+
+All ggplot2-based plots can be saved with `ggsave()`. For pheatmap objects,
+wrap in a PDF device:
+
+```{r save}
+# ggplot2 plots
+p <- cdst_plot_volcano(deg_results)
+ggsave("figures/volcano.pdf", p, width = 8, height = 6, dpi = 300)
+
+# pheatmap plots
+pdf("figures/distribution_heatmap.pdf", width = 14, height = 10)
+cdst_plot_distribution_heatmap(dist)
+dev.off()
+```
+
+## Customizing the Theme
+
+Override specific theme elements while keeping the base publication style:
+
+```{r customize}
+p <- cdst_plot_spatial(obj) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.position = "bottom",
+    legend.text = element_text(size = 8)
+  )
+```

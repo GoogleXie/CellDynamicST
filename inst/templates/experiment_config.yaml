@@ -1,0 +1,185 @@
+# =============================================================================
+# CellDynamicST Experiment Configuration Template
+# =============================================================================
+# Copy this file and edit to match your experimental design.
+# Load with: config <- cdst_load_config("my_config.yaml")
+# All parameters below have sensible defaults; only 'project_name' and 'groups'
+# are strictly required.
+# =============================================================================
+
+# Project identifier (used in output filenames)
+project_name: "My_Spatial_Project"
+
+# Species: "mouse" or "human"
+species: "mouse"
+
+# Output directory for all results
+output_dir: "results"
+
+# =============================================================================
+# Experimental Groups
+# =============================================================================
+# Define each experimental group with a unique name, genotype, and treatment.
+# Exactly one group should be marked as is_reference: true. This group is used
+# as the baseline for reference-based clustering.
+groups:
+  - name: "WT SAL"
+    genotype: "WT"
+    treatment: "SAL"
+    is_reference: true
+
+  - name: "WT MOR"
+    genotype: "WT"
+    treatment: "MOR"
+
+  - name: "KO SAL"
+    genotype: "KO"
+    treatment: "SAL"
+
+  - name: "KO MOR"
+    genotype: "KO"
+    treatment: "MOR"
+
+# =============================================================================
+# Sample Paths (Optional)
+# =============================================================================
+# Define paths to your Seurat objects or CosMx directories.
+# Each sample maps to one experimental group.
+# If omitted, provide a Seurat object directly to cdst_run().
+#
+# Supported formats:
+#   - .rds file containing a Seurat object
+#   - Directory containing CosMx output (tx_file.csv, metadata, fov_positions)
+#
+# samples:
+#   - id: "sample_01"
+#     path: "/path/to/sample_01.rds"
+#     group: "WT SAL"
+#
+#   - id: "sample_02"
+#     path: "/path/to/sample_02.rds"
+#     group: "WT MOR"
+#
+#   - id: "sample_03"
+#     path: "/path/to/cosmx_output_dir/"
+#     group: "KO SAL"
+#
+#   - id: "sample_04"
+#     path: "/path/to/sample_04.rds"
+#     group: "KO MOR"
+
+# =============================================================================
+# Pairwise Comparisons for DEG Analysis
+# =============================================================================
+# Each comparison defines a pair of groups for differential expression testing.
+# If omitted, all pairwise comparisons are auto-generated.
+comparisons:
+  - name: "treatment_WT"
+    group1: "WT SAL"
+    group2: "WT MOR"
+
+  - name: "treatment_KO"
+    group1: "KO SAL"
+    group2: "KO MOR"
+
+  - name: "genotype_baseline"
+    group1: "WT SAL"
+    group2: "KO SAL"
+
+  - name: "genotype_treated"
+    group1: "WT MOR"
+    group2: "KO MOR"
+
+# =============================================================================
+# Quality Control Thresholds
+# =============================================================================
+qc:
+  # Cells below this percentile for nCount_RNA are removed
+  min_count_percentile: 0.05
+
+  # Cells below this percentile for nFeature_RNA are removed
+  min_feature_percentile: 0.05
+
+  # FOVs with fewer cells than this are flagged
+  min_cells_per_fov: 500
+
+  # Minimum transcripts per cell (absolute threshold)
+  min_transcripts_per_cell: 100
+
+  # Maximum negative probe count per cell
+  max_neg_probe_per_cell: 1.0
+
+# =============================================================================
+# Clustering Parameters
+# =============================================================================
+clustering:
+  # Number of principal components to compute
+  n_pcs: 100
+
+  # PCs with |correlation| > threshold with log2(gene count) are excluded
+  # as technical bias components
+  bias_threshold: 0.7
+
+  # Annoy algorithm parameters for neighborhood graph
+  annoy_trees: 100
+  k_neighbors: 50
+
+  # Louvain clustering resolution (higher = more clusters)
+  resolution: 20
+
+  # Number of trees in the Random Forest classifier for label propagation
+  rf_ntree: 200
+
+# =============================================================================
+# WGCNA Parameters
+# =============================================================================
+wgcna:
+  # Soft-thresholding power. Set to null for automatic detection.
+  soft_power: null
+
+  # Minimum number of genes per module
+  min_module_size: 20
+
+  # Sensitivity for module splitting (0-4, higher = more modules)
+  deep_split: 3
+
+  # Module merge threshold (lower = fewer merges)
+  merge_cut_height: 0.10
+
+  # Minimum cells per region for co-expression analysis
+  min_cells_per_region: 100
+
+# =============================================================================
+# Brain Atlas Configuration
+# =============================================================================
+atlas:
+  # Atlas reference name
+  name: "Allen_CCFv3"
+
+  # Section plane: "sagittal", "coronal", or "horizontal"
+  # - sagittal: slice along ML axis (z), shows AP vs DV
+  # - coronal:  slice along AP axis (x), shows ML vs DV
+  # - horizontal: slice along DV axis (y), shows AP vs ML
+  plane: "sagittal"
+
+  # Slice coordinate along the chosen axis (integer, in annotation volume units).
+  # The coordinate system depends on the resolution:
+  #   resolution=10 => volume shape ~(1320, 800, 1140)
+  #   resolution=25 => volume shape ~(528, 320, 456)
+  # Set to null for automatic midpoint.
+  # Examples:
+  #   sagittal z=200 (10um) shows a medial sagittal section
+  #   coronal  x=660 (10um) shows a mid-AP coronal section
+  #   horizontal y=400 (10um) shows a mid-DV horizontal section
+  slice: null
+
+  # Allen annotation volume resolution in microns (10 or 25).
+  # 10um gives finer detail but larger download (~1.4 GB).
+  # 25um is faster to download (~25 MB).
+  resolution: 10
+
+  # Mapping of hierarchy levels to metadata column names
+  region_columns:
+    L3: "brain_region_L3"
+    L5: "brain_region_L5"
+    L7: "brain_region_L7"

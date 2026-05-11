@@ -1,0 +1,66 @@
+# =============================================================================
+# Default Neurotransmitter Classification Criteria (Mouse Brain)
+# =============================================================================
+# Each neurotransmitter type is defined by a set of marker genes (transporters
+# and biosynthesis enzymes). A cell is classified as a given NT type if the
+# fraction of cells in its cluster expressing any of the marker genes above
+# the threshold exceeds min_fraction.
+#
+# Based on: CellDynamicST paper, Neural_Transmitter_Process.R
+# =============================================================================
+
+threshold: 3.0          # log2CPM expression threshold
+min_fraction: 0.30      # Minimum fraction of cluster cells expressing marker
+
+neurotransmitter_types:
+  - name: "Glutamatergic"
+    abbreviation: "Glut"
+    markers:
+      - "Slc17a7"    # VGLUT1
+      - "Slc17a6"    # VGLUT2
+      - "Slc17a8"    # VGLUT3
+
+  - name: "GABAergic"
+    abbreviation: "GABA"
+    markers:
+      - "Gad1"       # GAD67
+      - "Gad2"       # GAD65
+      - "Slc32a1"    # VGAT
+
+  - name: "Glycinergic"
+    abbreviation: "Glyc"
+    markers:
+      - "Slc6a5"     # GlyT2
+      - "Slc6a9"     # GlyT1
+
+  - name: "Cholinergic"
+    abbreviation: "Chol"
+    markers:
+      - "Chat"        # Choline acetyltransferase
+      - "Slc18a3"     # VAChT
+      - "Slc5a7"      # CHT1
+
+  - name: "Dopaminergic"
+    abbreviation: "DA"
+    markers:
+      - "Th"          # Tyrosine hydroxylase
+      - "Slc6a3"      # DAT
+      - "Ddc"         # DOPA decarboxylase
+
+  - name: "Serotonergic"
+    abbreviation: "5HT"
+    markers:
+      - "Tph2"        # Tryptophan hydroxylase 2
+      - "Slc6a4"      # SERT
+      - "Fev"         # ETS factor (5-HT neuron marker)
+
+  - name: "Noradrenergic"
+    abbreviation: "NE"
+    markers:
+      - "Dbh"         # Dopamine beta-hydroxylase
+      - "Slc6a2"      # NET
+
+  - name: "Histaminergic"
+    abbreviation: "Hist"
+    markers:
+      - "Hdc"         # Histidine decarboxylase

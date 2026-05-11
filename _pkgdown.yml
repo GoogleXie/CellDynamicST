@@ -1,0 +1,134 @@
+url: https://github.com/YourLab/CellDynamicST
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#0d6efd"
+    code-bg: "#f8f9fa"
+
+home:
+  title: "CellDynamicST"
+  description: >
+    A comprehensive R package for spatial transcriptomic analysis of cell
+    dynamics, gene expression networks, and neurotransmitter classification
+    in brain tissue.
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, tutorials, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get Started
+      href: articles/quickstart.html
+    articles:
+      text: Vignettes
+      menu:
+        - text: Quick Start Guide
+          href: articles/quickstart.html
+        - text: Configuration Guide
+          href: articles/configuration.html
+        - text: Cell Type Annotation
+          href: articles/cell-typing.html
+        - text: WGCNA Network Analysis
+          href: articles/wgcna.html
+        - text: Visualization Gallery
+          href: articles/visualization-gallery.html
+    tutorials:
+      text: Notebooks
+      href: articles/notebooks.html
+
+reference:
+  - title: "Pipeline"
+    desc: "High-level pipeline orchestration"
+    contents:
+      - cdst_run
+      - cdst_summary
+
+  - title: "Configuration"
+    desc: "Experiment configuration and validation"
+    contents:
+      - cdst_load_config
+      - cdst_validate_config
+      - CdstConfig-class
+      - CdstResult-class
+
+  - title: "Module 1: Data Registration"
+    desc: "Sample loading, metadata standardization, and merging"
+    contents:
+      - cdst_register_samples
+      - cdst_merge_samples
+
+  - title: "Module 2: Preprocessing"
+    desc: "Quality control filtering and normalization"
+    contents:
+      - cdst_qc_filter
+      - cdst_normalize
+
+  - title: "Module 3: Cell Typing"
+    desc: "Clustering, annotation, and classification"
+    contents:
+      - cdst_cluster
+      - cdst_annotate_cell_types
+      - cdst_classify_nt
+      - cdst_classify_glia
+      - cdst_propagate_labels
+
+  - title: "Module 5: Cell Dynamics"
+    desc: "Proportional analysis and compositional changes"
+    contents:
+      - cdst_cell_proportions
+      - cdst_distribution_matrix
+      - cdst_annotation_coverage
+
+  - title: "Module 6: Differential Expression"
+    desc: "Interregional DEG and spatial enrichment"
+    contents:
+      - cdst_deg_interregional
+      - cdst_spatial_enrichment
+      - cdst_summarize_deg
+
+  - title: "Module 7: WGCNA"
+    desc: "Weighted gene co-expression network analysis"
+    contents:
+      - cdst_wgcna_prepare
+      - cdst_wgcna_detect
+      - cdst_wgcna_trait_cor
+      - cdst_wgcna_hub_genes
+      - cdst_wgcna_preservation
+      - cdst_wgcna_pathway_enrich
+
+  - title: "Visualization"
+    desc: "Publication-quality plotting functions"
+    contents:
+      - cdst_plot_spatial
+      - cdst_plot_distribution_heatmap
+      - cdst_plot_trait_heatmap
+      - cdst_plot_volcano
+      - cdst_plot_deg_scatter
+      - cdst_plot_network
+      - cdst_plot_spatial_enrichment
+      - cdst_plot_qc
+
+  - title: "Utilities"
+    desc: "Helper functions and themes"
+    contents:
+      - cdst_theme_publication
+      - cdst_palette
+      - validate_seurat
+      - setup_parallel
+
+articles:
+  - title: "Getting Started"
+    navbar: ~
+    contents:
+      - quickstart
+      - configuration
+  - title: "Analysis Guides"
+    contents:
+      - cell-typing
+      - wgcna
+  - title: "Reference"
+    contents:
+      - visualization-gallery

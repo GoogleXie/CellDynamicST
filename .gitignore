@@ -1,0 +1,27 @@
+# R package build artifacts
+*.Rcheck/
+*.tar.gz
+*.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation build
+docs/
+pkgdown/
+
+# Test artifacts
+coverage/
+*.bak
+
+# Environment
+.env
+.Renviron

@@ -1,0 +1,180 @@
+---
+title: "Cell Type Annotation Deep Dive"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Cell Type Annotation Deep Dive}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+Cell type annotation in CellDynamicST follows a three-stage hierarchical
+approach that mirrors the biological organization of brain tissue. This
+vignette explains the methodology, parameters, and customization options for
+each stage.
+
+## The Three-Stage Annotation Pipeline
+
+The annotation pipeline proceeds through three sequential stages, each adding
+a layer of biological specificity to the cell identity assignments:
+
+| Stage | Function | Output Column | Description |
+|-------|----------|---------------|-------------|
+| 1. Clustering & Annotation | `cdst_cluster()` + `cdst_annotate_cell_types()` | `cdst_cell_type` | Major cell types via reference-based RF |
+| 2. NT Classification | `cdst_classify_nt()` | `cdst_nt_type` | Neurotransmitter identity (Glut, GABA, etc.) |
+| 3. Glial Typing | `cdst_classify_glia()` | `cdst_glia_type` | Glial subtypes via GMM on marker expression |
+
+## Stage 1: Reference-Based Clustering
+
+The core of CellDynamicST's cell typing is a **reference-based Random Forest
+label propagation** approach. This method was developed to handle the challenge
+of annotating millions of cells from spatial transcriptomic platforms where
+per-cell gene coverage is lower than scRNA-seq.
+
+### Algorithm
+
+The clustering and annotation process follows these steps:
+
+1. **Dimensionality reduction**: PCA on the top variable features, followed by
+   UMAP embedding for visualization.
+
+2. **Graph-based clustering**: Shared nearest neighbor (SNN) graph construction
+   followed by Louvain community detection at the configured resolution.
+
+3. **Reference label transfer**: If a reference Seurat object is provided, a
+   Random Forest classifier is trained on the reference labels and applied to
+   each cluster. The majority vote across cells in each cluster determines the
+   cluster's cell type assignment.
+
+4. **Marker-based refinement**: For clusters without a confident RF assignment
+   (below `rf_threshold`), marker gene expression patterns are used as a
+   fallback annotation strategy.
+
+```{r stage1}
+config <- cdst_load_config("config.yaml")
+
+# Cluster
+obj <- cdst_cluster(obj, config, resolution = 0.8)
+
+# Annotate with reference
+obj <- cdst_annotate_cell_types(obj, config)
+
+# Check results
+table(obj$cdst_cell_type)
+```
+
+### Customizing Marker Genes
+
+You can provide a custom marker gene CSV file with columns `cell_type` and
+`gene`:
+
+```{r markers}
+# Custom markers
+markers <- data.frame(
+  cell_type = c("Excitatory", "Excitatory", "Inhibitory", "Astrocyte"),
+  gene = c("Slc17a7", "Camk2a", "Gad1", "Aqp4")
+)
+write.csv(markers, "my_markers.csv", row.names = FALSE)
+```
+
+## Stage 2: Neurotransmitter Classification
+
+Neurotransmitter classification assigns each neuron to its primary
+neurotransmitter identity based on the expression of canonical transporter and
+synthetic enzyme genes. The classification uses a criteria-based approach
+defined in a YAML file.
+
+### Default Mouse Criteria
+
+The package ships with default criteria for mouse brain:
+
+| NT Type | Key Markers | Classification Rule |
+|---------|-------------|---------------------|
+| Glutamatergic | Slc17a7, Slc17a6 | Expression > threshold in cluster |
+| GABAergic | Gad1, Gad2, Slc32a1 | Expression > threshold in cluster |
+| Cholinergic | Chat, Slc18a3 | Expression > threshold in cluster |
+| Dopaminergic | Th, Slc6a3 | Expression > threshold in cluster |
+| Serotonergic | Tph2, Slc6a4 | Expression > threshold in cluster |
+
+```{r nt}
+obj <- cdst_classify_nt(obj, config, threshold = 0.3)
+table(obj$cdst_nt_type)
+```
+
+### Custom NT Criteria
+
+Create a custom YAML file to define your own neurotransmitter criteria:
+
+```yaml
+neurotransmitter_types:
+  Glutamatergic:
+    markers: ["Slc17a7", "Slc17a6", "Slc17a8"]
+    threshold: 0.3
+    require_any: true
+  GABAergic:
+    markers: ["Gad1", "Gad2", "Slc32a1"]
+    threshold: 0.3
+    require_any: true
+```
+
+## Stage 3: Glial Subtype Classification
+
+Glial cells are further classified into subtypes using Gaussian Mixture Models
+(GMM) on the expression of canonical glial markers. This approach captures the
+continuous nature of glial identity better than hard thresholding.
+
+### Supported Glial Subtypes
+
+| Subtype | Key Markers | Method |
+|---------|-------------|--------|
+| Astrocyte | Aqp4, Gfap, Aldh1l1 | GMM on marker expression |
+| Oligodendrocyte | Mbp, Plp1, Mog | GMM on marker expression |
+| OPC | Pdgfra, Cspg4 | GMM on marker expression |
+| Microglia | Cx3cr1, P2ry12, Tmem119 | GMM on marker expression |
+
+```{r glia}
+obj <- cdst_classify_glia(obj, config)
+table(obj$cdst_glia_type, useNA = "ifany")
+```
+
+## Evaluating Annotation Quality
+
+Use `cdst_annotation_coverage()` to evaluate how well your annotations perform
+at different confidence thresholds:
+
+```{r coverage}
+coverage <- cdst_annotation_coverage(
+  obj,
+  column_name = "cdst_cell_type",
+  thresholds = seq(0, 1, by = 0.05)
+)
+
+# Plot coverage curve
+library(ggplot2)
+ggplot(coverage, aes(threshold, proportion_annotated)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Annotation Coverage vs Confidence Threshold",
+       x = "Confidence Threshold",
+       y = "Proportion of Clusters Annotated") +
+  cdst_theme_publication()
+```
+
+## Visualizing Annotations
+
+```{r viz}
+# Spatial map colored by cell type
+cdst_plot_spatial(obj, color_by = "cdst_cell_type")
+
+# Spatial map colored by NT type
+cdst_plot_spatial(obj, color_by = "cdst_nt_type")
+
+# Distribution heatmap
+dist <- cdst_distribution_matrix(obj)
+cdst_plot_distribution_heatmap(dist)
+```
