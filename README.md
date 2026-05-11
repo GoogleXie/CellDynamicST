@@ -9,6 +9,18 @@
 
 ---
 
+## Pipeline Overview
+
+CellDynamicST implements a modular seven-stage analysis pipeline that takes raw spatial transcriptomic data through registration, quality control, cell typing, visualization, dynamics analysis, differential expression, and weighted gene co-expression network analysis. Each module is independently configurable via a single YAML experiment file and produces publication-quality figures suitable for high-impact journals.
+
+<p align="center">
+  <img src="man/figures/pipeline_overview.png" width="95%" alt="CellDynamicST Pipeline Overview"/>
+</p>
+
+The pipeline accepts any spatial transcriptomic dataset (MERFISH, CosMx, Visium) as a Seurat object. Modules can be run individually or as a complete end-to-end workflow via `cdst_run()`. All outputs, including figures, statistical tables, and enrichment results, are stored in a structured `CdstResult` S4 object for downstream access and reporting.
+
+---
+
 ## Visualization Gallery
 
 CellDynamicST generates publication-quality figures at every stage of the analysis pipeline. Below are representative outputs from the Oprm1 A118G spatial transcriptomics dataset.

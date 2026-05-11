@@ -90,62 +90,32 @@ def _load_allen_annotation(cache_dir=None, resolution=10):
     return annotation, structure_tree
 
 
-def _get_region_centers(annotation, structure_tree, plane="sagittal", slice_idx=None):
+def _get_region_centers_3d(annotation, structure_tree):
     """
-    Compute 2D centroid of each brain structure in the chosen slice plane.
-    For parent regions, aggregates all descendant structure voxels to compute
-    the centroid.
-
-    Parameters
-    ----------
-    annotation : 3D ndarray (AP, DV, ML)
-    structure_tree : AllenSDK StructureTree
-    plane : str  'sagittal' | 'coronal' | 'horizontal'
-    slice_idx : int  index along the slicing axis (None = midpoint)
+    Compute 3D centroid of each brain structure from the FULL annotation volume.
+    This matches the original script's approach: centers are computed globally,
+    then projected onto the chosen slice plane.
 
     Returns
     -------
-    region_centers : dict  {structure_id: np.array([x, y])}
-    slice_2d : 2D ndarray  the annotation slice for contour drawing
+    region_centers : dict  {structure_id: np.array([AP, DV, ML])}
     """
-    shape = annotation.shape  # (AP, DV, ML)
-    if plane == "sagittal":
-        if slice_idx is None:
-            slice_idx = shape[2] // 2
-        slice_idx = min(max(0, slice_idx), shape[2] - 1)
-        slice_2d = annotation[:, :, slice_idx]  # (AP, DV)
-    elif plane == "coronal":
-        if slice_idx is None:
-            slice_idx = shape[0] // 2
-        slice_idx = min(max(0, slice_idx), shape[0] - 1)
-        slice_2d = annotation[slice_idx, :, :]  # (DV, ML)
-    elif plane == "horizontal":
-        if slice_idx is None:
-            slice_idx = shape[1] // 2
-        slice_idx = min(max(0, slice_idx), shape[1] - 1)
-        slice_2d = annotation[:, slice_idx, :]  # (AP, ML)
-    else:
-        raise ValueError(f"Unknown plane '{plane}'. Use sagittal/coronal/horizontal.")
+    from tqdm import tqdm
 
-    # Build a lookup: leaf_id -> set of all ancestor IDs (including self)
-    # This lets us compute centroids for parent regions by aggregating descendants
-    unique_ids_in_slice = set(int(x) for x in np.unique(slice_2d) if x != 0)
-
-    # Compute centroids for each unique leaf-level structure
-    leaf_centers_raw = {}  # {leaf_id: coords_array}
-    for sid in unique_ids_in_slice:
-        coords = np.argwhere(slice_2d == sid)
-        if coords.size > 0:
-            leaf_centers_raw[sid] = coords
-
-    # Also build parent -> descendant mapping for requested regions
     region_centers = {}
-    # Store leaf-level centroids too
-    for sid, coords in leaf_centers_raw.items():
-        center = coords.mean(axis=0)
-        region_centers[sid] = np.array([center[1], slice_2d.shape[0] - center[0]])
+    unique_structures = np.unique(annotation)
 
-    return region_centers, slice_2d, slice_idx, leaf_centers_raw
+    for struct_id in tqdm(unique_structures, desc="Computing 3D centers"):
+        if struct_id != 0:
+            coords = np.argwhere(annotation == struct_id)
+            if coords.size > 0:
+                center = coords.mean(axis=0)  # [AP, DV, ML]
+                # Store as [DV, AP] (flipped first two) — matches original np.flip(center[:2])
+                region_centers[int(struct_id)] = np.flip(center[:2])
+            else:
+                print(f"Warning: No coordinates found for structure ID '{struct_id}'.")
+
+    return region_centers
 
 
 def _map_acronyms_to_ids(structure_tree, acronyms):
@@ -159,6 +129,26 @@ def _map_acronyms_to_ids(structure_tree, acronyms):
         except (KeyError, IndexError):
             pass
     return acronym_to_id
+
+
+def _get_parent_center(structure_tree, parent_id, region_centers):
+    """
+    For a parent region (e.g., Isocortex), compute the centroid by averaging
+    the centroids of all descendant leaf structures that have centers.
+    """
+    try:
+        desc_ids = set(structure_tree.descendant_ids([parent_id])[0])
+    except Exception:
+        desc_ids = {parent_id}
+
+    coords = []
+    for did in desc_ids:
+        if did in region_centers:
+            coords.append(region_centers[did])
+
+    if coords:
+        return np.mean(coords, axis=0)
+    return None
 
 
 # =============================================================================
@@ -180,6 +170,10 @@ def plot_atlas_network(
 ):
     """
     Plot WGCNA network overlaid on Allen Brain Atlas annotation volume.
+    Coordinate system matches the original gene_coexpression_network_atlas_plot.py:
+    - Region centers computed from FULL 3D volume (not just the slice)
+    - Slice drawn as np.flipud(np.transpose(annotation[:, :, z]))
+    - Node coordinates: flipud(transpose(center)), then y = shape[1] - y
 
     Parameters
     ----------
@@ -209,12 +203,34 @@ def plot_atlas_network(
     annotation, structure_tree = _load_allen_annotation(cache_dir, resolution)
     print(f"  Annotation volume shape: {annotation.shape} (AP, DV, ML)")
 
-    # Get region centers and 2D slice
-    region_centers, slice_2d, actual_slice, leaf_raw = _get_region_centers(
-        annotation, structure_tree, plane=plane, slice_idx=slice_idx
-    )
-    print(f"  Plane: {plane}, slice index: {actual_slice}")
-    print(f"  Found {len(region_centers)} leaf structures in slice")
+    # Compute region centers from FULL 3D volume (matching original script)
+    print("Computing region centers from full 3D volume...")
+    region_centers = _get_region_centers_3d(annotation, structure_tree)
+    print(f"  Computed centers for {len(region_centers)} structures")
+
+    # Determine slice index
+    shape = annotation.shape  # (AP, DV, ML)
+    if plane == "sagittal":
+        if slice_idx is None:
+            slice_idx = shape[2] // 2
+        slice_idx = min(max(0, slice_idx), shape[2] - 1)
+        # Original: annotation_slice = np.flipud(np.transpose(annotation[:, :, z]))
+        annotation_slice = np.flipud(np.transpose(annotation[:, :, slice_idx]))
+    elif plane == "coronal":
+        if slice_idx is None:
+            slice_idx = shape[0] // 2
+        slice_idx = min(max(0, slice_idx), shape[0] - 1)
+        annotation_slice = np.flipud(np.transpose(annotation[slice_idx, :, :]))
+    elif plane == "horizontal":
+        if slice_idx is None:
+            slice_idx = shape[1] // 2
+        slice_idx = min(max(0, slice_idx), shape[1] - 1)
+        annotation_slice = np.flipud(np.transpose(annotation[:, slice_idx, :]))
+    else:
+        raise ValueError(f"Unknown plane '{plane}'. Use sagittal/coronal/horizontal.")
+
+    print(f"  Plane: {plane}, slice index: {slice_idx}")
+    print(f"  Annotation slice shape: {annotation_slice.shape}")
 
     # Map acronyms to IDs
     all_acronyms = set(nodes_df["region"].unique())
@@ -225,39 +241,25 @@ def plot_atlas_network(
     acronym_to_id = _map_acronyms_to_ids(structure_tree, all_acronyms)
     print(f"  Mapped {len(acronym_to_id)}/{len(all_acronyms)} acronyms to IDs")
 
-    # For parent regions, compute centroid from all descendant voxels in slice
-    unique_ids_in_slice = set(leaf_raw.keys())
+    # For parent regions not directly in region_centers, aggregate descendants
     for acr, sid in acronym_to_id.items():
-        if sid in region_centers:
-            continue  # already a leaf-level match
-        # Get all descendant IDs
-        try:
-            desc_ids = set(structure_tree.descendant_ids([sid])[0])
-        except Exception:
-            desc_ids = {sid}
-        # Collect all voxel coordinates from descendants present in slice
-        all_coords = []
-        for did in desc_ids:
-            if did in leaf_raw:
-                all_coords.append(leaf_raw[did])
-        if all_coords:
-            merged = np.vstack(all_coords)
-            center = merged.mean(axis=0)
-            region_centers[sid] = np.array([center[1], slice_2d.shape[0] - center[0]])
-            print(f"  Aggregated {len(all_coords)} sub-regions for '{acr}' (id={sid})")
-        else:
-            print(f"  No descendant voxels for '{acr}' in this slice")
+        if sid not in region_centers:
+            parent_center = _get_parent_center(structure_tree, sid, region_centers)
+            if parent_center is not None:
+                region_centers[sid] = parent_center
+                print(f"  Aggregated descendants for '{acr}' (id={sid})")
+            else:
+                print(f"  No descendant centers for '{acr}'")
 
     # Build figure
     fig, ax = plt.subplots(1, 1, figsize=figsize)
 
     # Draw brain structure contours from annotation slice
-    flipped_slice = np.flipud(slice_2d.T) if plane == "sagittal" else slice_2d
-    unique_structs = np.unique(flipped_slice)
+    unique_structs = np.unique(annotation_slice)
     for sid in unique_structs:
         if sid == 0:
             continue
-        mask = (flipped_slice == sid).astype(float)
+        mask = (annotation_slice == sid).astype(float)
         ax.contour(mask, colors="grey", levels=[0.5], linewidths=0.8, alpha=0.2)
 
     # Build networkx graph
@@ -269,18 +271,25 @@ def plot_atlas_network(
         acr = row["region"]
         rid = acronym_to_id.get(acr)
         if rid and rid in region_centers:
-            center = region_centers[rid]
-            # For sagittal, transform coordinates to match flipped slice
-            if plane == "sagittal":
-                cx = center[0]
-                cy = flipped_slice.shape[0] - center[1]
-            else:
-                cx, cy = center[0], center[1]
+            center = np.array(region_centers[rid])
+            # Original transformation:
+            #   center = np.flipud(np.transpose(center))
+            #   center[1] = annotation.shape[1] - center[1]
+            # center is [DV, AP] from _get_region_centers_3d
+            # flipud(transpose) on a 1D array: effectively swaps the two values -> [AP, DV]
+            center = np.flipud(np.transpose(center))  # [AP, DV] -> swap -> [DV, AP] ... 
+            # Actually for a 1D array, transpose is no-op, flipud reverses: [DV, AP] -> [AP, DV]
+            # So center is now [AP, DV]
+            center[1] = annotation.shape[1] - center[1]  # flip DV axis
+            
+            cx, cy = center[0], center[1]
+            print(f"  center for: {acr} ({cx:.1f}, {cy:.1f})")
+            
             G.add_node(acr, size=row.get(node_size_col, 50),
                        color=row.get(node_color_col, "grey"))
             pos[acr] = (cx, cy)
         else:
-            print(f"  Warning: '{acr}' not found in this slice")
+            print(f"  Warning: '{acr}' not found in atlas")
 
     # Normalize edge weights for line width
     if edge_weight_col in edges_df.columns:
@@ -293,15 +302,15 @@ def plot_atlas_network(
         norm_weights = np.full(len(edges_df), 4.0)
 
     # Edge colormap
-    import matplotlib.cm as cm
+    import matplotlib.cm as cm_mod
     import matplotlib.colors as mcolors
     if edge_weight_col in edges_df.columns:
         w_vals = edges_df[edge_weight_col].values
         enorm = mcolors.Normalize(vmin=w_vals.min(), vmax=w_vals.max())
-        ecmap = cm.Greys
+        ecmap = cm_mod.Greys
     else:
         enorm = mcolors.Normalize(0, 1)
-        ecmap = cm.Greys
+        ecmap = cm_mod.Greys
 
     for idx, (_, row) in enumerate(edges_df.iterrows()):
         src = str(row.get("source", row.get("region", "")))
@@ -320,17 +329,28 @@ def plot_atlas_network(
         ax.plot([x1, x2], [y1, y2], color=d.get("color", "grey"),
                 linewidth=d.get("weight", 3) * 0.8, alpha=0.5, zorder=2)
 
-    # Draw nodes
+    # Draw nodes (using networkx for consistency with original)
+    nx.draw_networkx_nodes(
+        G, pos, ax=ax,
+        node_size=[G.nodes[n].get("size", 50) * 10 for n in G.nodes],
+        node_color=[MODULE_COLORS.get(str(G.nodes[n].get("color", "grey")),
+                                       str(G.nodes[n].get("color", "grey")))
+                    for n in G.nodes],
+        alpha=0.8
+    )
+    nx.draw_networkx_edges(
+        G, pos, ax=ax,
+        width=[G.edges[e].get("weight", 3) * 0.8 for e in G.edges],
+        edge_color=[G.edges[e].get("color", "grey") for e in G.edges],
+        alpha=0.5
+    )
+
+    # Add text labels
     for node in G.nodes:
         if node not in pos:
             continue
         x, y = pos[node]
-        size = G.nodes[node].get("size", 50) * 10
-        color_name = str(G.nodes[node].get("color", "grey"))
-        color = MODULE_COLORS.get(color_name, color_name)
-        ax.scatter(x, y, s=size, c=color, edgecolors="white",
-                   linewidths=2.5, zorder=4, alpha=0.85)
-        txt = ax.text(x, y, node, fontsize=16, ha="center", va="center",
+        txt = ax.text(x, y, node, fontsize=14, ha="center", va="center",
                       fontweight="bold", zorder=5,
                       path_effects=[pe.withStroke(linewidth=3, foreground="white")])
         texts.append(txt)
@@ -340,10 +360,11 @@ def plot_atlas_network(
         adjust_text(texts, ax=ax,
                     arrowprops=dict(arrowstyle="-", color="grey", lw=0.5))
 
-    if title is None:
-        title = f"Network on Brain Atlas — {plane.title()} Plane (slice={actual_slice})"
-    ax.set_title(title, fontsize=20, fontweight="bold", pad=15)
     ax.axis("off")
+
+    if title is None:
+        title = f"Network on Brain Atlas at {plane.title()} Plane z={slice_idx}"
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=20)
 
     plt.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close()
@@ -398,363 +419,229 @@ def plot_atlas_network_simple(
                         facecolor="#EEEEEA", edgecolor="#B0B0B0",
                         linewidth=2.0, alpha=0.4, zorder=0)
     ax.add_patch(brainstem)
-    olf = Ellipse((0.12, 0.50), 0.10, 0.08, angle=0,
-                  facecolor="#F0F0E8", edgecolor="#B0B0B0",
-                  linewidth=1.5, alpha=0.4, zorder=0)
-    ax.add_patch(olf)
 
-    # Edge colormap
-    cmap_edge = LinearSegmentedColormap.from_list(
-        "edge_cmap", ["#3B4CC0", "#F7F7F7", "#B40426"]
-    )
-    if edge_weight_col in edges_df.columns:
-        edges_plot = edges_df[edges_df[edge_weight_col].abs() >= min_edge_weight].copy()
-        vmin = edges_plot[edge_weight_col].min()
-        vmax = edges_plot[edge_weight_col].max()
-        if vmin >= 0: vmin = -0.01
-        if vmax <= 0: vmax = 0.01
-        edge_norm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
-    else:
-        edges_plot = edges_df.copy()
-        edge_norm = TwoSlopeNorm(vmin=-1, vcenter=0, vmax=1)
-
-    for _, row in edges_plot.iterrows():
-        src = str(row["source"])
-        tgt = str(row["target"])
-        if src not in region_coords or tgt not in region_coords:
-            continue
-        x1, y1 = region_coords[src]
-        x2, y2 = region_coords[tgt]
-        weight = row.get(edge_weight_col, 0.5)
-        color = cmap_edge(edge_norm(weight))
-        lw = abs(weight) * 5 + 0.5
-        ax.plot([x1, x2], [y1, y2], color=color, linewidth=lw,
-                alpha=0.5, zorder=1, solid_capstyle="round")
+    import networkx as nx
+    G = nx.Graph()
+    pos = {}
 
     for _, row in nodes_df.iterrows():
-        region = str(row.get("region", ""))
-        if region not in region_coords:
-            continue
-        x, y = region_coords[region]
-        size = row.get(node_size_col, 50)
-        color_name = str(row.get(node_color_col, "grey"))
-        color = MODULE_COLORS.get(color_name, color_name)
-        radius = np.clip(np.sqrt(size) / 40, 0.02, 0.07)
-        circle = Circle((x, y), radius, facecolor=color,
-                        edgecolor="white", linewidth=2.5, zorder=3)
-        ax.add_patch(circle)
-        ax.text(x, y - radius - 0.025, region, fontsize=14,
-                ha="center", va="top", fontweight="bold",
-                path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+        acr = row["region"]
+        if acr in region_coords:
+            G.add_node(acr, size=row.get(node_size_col, 50),
+                       color=row.get(node_color_col, "grey"))
+            pos[acr] = region_coords[acr]
 
-    sm = plt.cm.ScalarMappable(cmap=cmap_edge, norm=edge_norm)
-    sm.set_array([])
-    cbar = plt.colorbar(sm, ax=ax, shrink=0.4, pad=0.02, aspect=20)
-    cbar.set_label("Module Correlation", fontsize=15, fontweight="bold")
+    for _, row in edges_df.iterrows():
+        src = str(row.get("source", row.get("region", "")))
+        tgt = str(row.get("target", row.get("region2", "")))
+        if src in pos and tgt in pos:
+            w = abs(row.get(edge_weight_col, 0.5))
+            if w >= min_edge_weight:
+                G.add_edge(src, tgt, weight=w)
 
-    ax.set_title(title, fontsize=20, fontweight="bold", pad=15)
+    nx.draw_networkx_edges(G, pos, ax=ax, width=2, alpha=0.4, edge_color="grey")
+    nx.draw_networkx_nodes(
+        G, pos, ax=ax,
+        node_size=[G.nodes[n].get("size", 50) * 8 for n in G.nodes],
+        node_color=[MODULE_COLORS.get(str(G.nodes[n].get("color", "grey")),
+                                       str(G.nodes[n].get("color", "grey")))
+                    for n in G.nodes],
+        alpha=0.85, edgecolors="white", linewidths=2
+    )
+    nx.draw_networkx_labels(G, pos, ax=ax, font_size=13, font_weight="bold")
+
+    ax.set_title(title, fontsize=18, fontweight="bold", pad=15)
     ax.axis("off")
     plt.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close()
-    print(f"Saved atlas network (simple): {output_path}")
+    print(f"Saved simple atlas network: {output_path}")
 
 
 # =============================================================================
-# 2. CIRCOS PLOT: Multi-ring enrichment (matching manuscript Fig 4B)
+# 2. CIRCOS PLOT
 # =============================================================================
-def plot_circos(
-    module_df, output_path,
-    comparison_cols=None,
-    module_col="module_color",
-    enrichment_col_prefix="NES_",
-    title="Consensus Module Enrichment Circos Plot",
-    figsize=(12, 12),
-    ring_colormaps=None,
-):
+def plot_circos(modules_df, output_path, figsize=(14, 14)):
     """
-    Create a multi-ring circos plot where each ring represents a different
-    enrichment type (OUD, DEG effects), with the outermost ring showing
-    module colors.
+    Multi-ring circos plot for WGCNA module enrichment.
+    Outer ring = module color, inner rings = enrichment values.
     """
-    fig, ax = plt.subplots(1, 1, figsize=figsize, subplot_kw={"projection": "polar"})
+    ring_cols = [c for c in modules_df.columns
+                 if c not in ("module", "module_color", "n_genes")]
+    n_rings = len(ring_cols)
+    n_mod = len(modules_df)
+    if n_mod == 0:
+        print("No modules to plot"); return
 
-    if comparison_cols is None:
-        comparison_cols = [c for c in module_df.columns
-                          if c.startswith(enrichment_col_prefix)]
+    fig, ax = plt.subplots(1, 1, figsize=figsize, subplot_kw={"polar": True})
+    angles = np.linspace(0, 2 * np.pi, n_mod, endpoint=False)
+    width = 2 * np.pi / n_mod * 0.85
 
-    n_modules = len(module_df)
-    n_rings = len(comparison_cols)
-    if n_modules == 0 or n_rings == 0:
-        print("No data for circos plot.")
-        return
+    r_outer = 1.0
+    ring_width = 0.10
+    gap = 0.02
 
-    if ring_colormaps is None:
-        default_cmaps = [plt.cm.Oranges, plt.cm.Blues, plt.cm.Purples,
-                         plt.cm.Greens, plt.cm.Reds]
-        ring_colormaps = [default_cmaps[i % len(default_cmaps)]
-                          for i in range(n_rings)]
+    # Module color ring (outermost)
+    for i, (_, row) in enumerate(modules_df.iterrows()):
+        color = MODULE_COLORS.get(str(row.get("module_color", "grey")), "#CCCCCC")
+        ax.bar(angles[i], ring_width, width=width, bottom=r_outer,
+               color=color, edgecolor="white", linewidth=0.5, zorder=3)
 
-    for col in comparison_cols:
-        module_df[col + "_norm"] = _norm(module_df[col])
-
-    angles = np.linspace(0, 2 * np.pi, n_modules + 1)
-    ring_base = 0.85
-    ring_width = 0.06
-    radii = [ring_base + ring_width * i for i in range(n_rings + 1)]
-
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.axis("off")
-    ax.set_ylim(0, radii[-1] + 0.20)
-
-    for j, (comp_col, cmap) in enumerate(zip(comparison_cols, ring_colormaps)):
-        for idx in range(n_modules):
-            row = module_df.iloc[idx]
-            theta0, theta1 = angles[idx], angles[idx + 1]
-            norm_val = row[comp_col + "_norm"]
-            color = cmap(norm_val)
-            ax.bar(
-                x=(theta0 + theta1) / 2,
-                height=radii[j + 1] - radii[j],
-                width=theta1 - theta0,
-                bottom=radii[j],
-                color=color, linewidth=0, align="center"
-            )
-
-    for idx in range(n_modules):
-        row = module_df.iloc[idx]
-        theta0, theta1 = angles[idx], angles[idx + 1]
-        color_name = str(row.get(module_col, "grey"))
-        color = MODULE_COLORS.get(color_name, color_name)
-        ax.bar(
-            x=(theta0 + theta1) / 2,
-            height=0.055,
-            width=theta1 - theta0,
-            bottom=radii[-1],
-            color=color, edgecolor="black", linewidth=1.2, align="center"
-        )
-
-    for idx in range(n_modules):
-        row = module_df.iloc[idx]
-        theta0, theta1 = angles[idx], angles[idx + 1]
-        mid_angle = (theta0 + theta1) / 2
-        label = str(row.get(module_col, f"M{idx}"))
-        rotation = (np.degrees(mid_angle) + 270) % 360
-        if 90 < rotation < 270:
-            rotation += 180
-        ax.text(mid_angle, radii[-1] + 0.09, label,
-                fontsize=12, fontweight="bold",
-                ha="center", va="center",
+    # Module name labels
+    for i, (_, row) in enumerate(modules_df.iterrows()):
+        label_r = r_outer + ring_width + 0.06
+        angle_deg = np.degrees(angles[i])
+        rotation = angle_deg - 90 if angle_deg < 180 else angle_deg + 90
+        ha = "left" if angle_deg < 180 else "right"
+        ax.text(angles[i], label_r, str(row["module"]),
+                ha=ha, va="center", fontsize=11, fontweight="bold",
                 rotation=rotation, rotation_mode="anchor")
 
-    ring_labels = [c.replace(enrichment_col_prefix, "").replace("_", " ")
-                   for c in comparison_cols]
-    legend_patches = []
-    for lbl, cmap in zip(ring_labels, ring_colormaps):
-        legend_patches.append(Patch(facecolor=cmap(0.85), edgecolor="k", label=lbl))
-    legend_patches.append(Patch(facecolor="#888888", edgecolor="k", label="Module Color"))
-    ax.legend(handles=legend_patches, bbox_to_anchor=(0.5, 1.08),
-              loc="lower center", ncol=min(3, len(legend_patches)),
-              fontsize=13, frameon=False)
+    # Enrichment rings (inside)
+    cmap_pos = LinearSegmentedColormap.from_list("pos", ["#FFFFFF", "#D62728"])
+    cmap_neg = LinearSegmentedColormap.from_list("neg", ["#1F77B4", "#FFFFFF"])
 
-    subtitle = "(inner\u2192outer: " + ", ".join(ring_labels) + ", Module Color)"
-    ax.set_title(title + "\n" + subtitle, fontsize=18, fontweight="bold",
-                 pad=20, y=1.15)
+    for ri, col in enumerate(ring_cols):
+        r_base = r_outer - (ri + 1) * (ring_width + gap)
+        vals = modules_df[col].fillna(0).values
+        vmax = max(abs(vals.max()), abs(vals.min()), 1e-9)
+        for i, v in enumerate(vals):
+            if v >= 0:
+                color = cmap_pos(min(v / vmax, 1.0))
+            else:
+                color = cmap_neg(min(abs(v) / vmax, 1.0))
+            ax.bar(angles[i], ring_width, width=width, bottom=r_base,
+                   color=color, edgecolor="white", linewidth=0.3, zorder=2)
 
-    plt.savefig(output_path, dpi=400, bbox_inches="tight", facecolor="white")
+    # Ring labels
+    for ri, col in enumerate(ring_cols):
+        r_label = r_outer - (ri + 1) * (ring_width + gap) + ring_width / 2
+        label = col.replace("_", " ").title()
+        ax.text(np.pi, r_label, label, ha="center", va="center",
+                fontsize=9, fontstyle="italic", color="#555555")
+
+    ax.set_ylim(0, r_outer + ring_width + 0.25)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.spines["polar"].set_visible(False)
+    ax.set_title("WGCNA Module Enrichment", fontsize=18, fontweight="bold",
+                 pad=25, y=1.05)
+
+    plt.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close()
-    print(f"Saved circos plot: {output_path}")
+    print(f"Saved circos: {output_path}")
 
 
 # =============================================================================
-# 3. HUB GENE SUBNETWORK (matching manuscript Fig 4F-I)
+# 3. HUB GENE SUBNETWORK
 # =============================================================================
-def plot_hub_network(
-    hub_df, edge_df, output_path,
-    gene_col="gene",
-    module_col="module_color",
-    kme_col="kME",
-    is_hub_col="is_hub",
-    source_col="gene1",
-    target_col="gene2",
-    weight_col="weight",
-    top_n=50,
-    title="Hub Gene Subnetwork",
-    figsize=(14, 14),
-):
+def plot_hub_network(hubs_df, edges_df, output_path, figsize=(14, 14)):
     """
-    Create a force-directed hub gene subnetwork with gold hub nodes and
-    sky blue neighbor nodes.
+    Hub gene subnetwork: gold hub nodes + sky blue neighbor nodes.
     """
-    try:
-        import networkx as nx
-    except ImportError:
-        print("networkx required. Install with: pip install networkx")
-        return
-
-    hub_df = hub_df.nlargest(top_n, kme_col).copy()
-
-    if is_hub_col in hub_df.columns:
-        hub_genes = set(hub_df[hub_df[is_hub_col].astype(str).isin(
-            ["TRUE", "True", "true", "1", "yes"])][gene_col])
-    else:
-        n_hubs = max(3, int(len(hub_df) * 0.2))
-        hub_genes = set(hub_df.nlargest(n_hubs, kme_col)[gene_col])
-
-    all_genes = set(hub_df[gene_col])
-    edge_df = edge_df[
-        edge_df[source_col].isin(all_genes) & edge_df[target_col].isin(all_genes)
-    ].copy()
+    import networkx as nx
 
     G = nx.Graph()
-    for _, row in hub_df.iterrows():
-        gene = row[gene_col]
-        is_hub = gene in hub_genes
-        G.add_node(gene, is_hub=is_hub, kme=row[kme_col])
+    hub_genes = set(hubs_df["gene"].unique()) if "gene" in hubs_df.columns else set()
 
-    for _, row in edge_df.iterrows():
-        if row[source_col] in G and row[target_col] in G:
-            G.add_edge(row[source_col], row[target_col],
-                       weight=abs(row.get(weight_col, 0.5)))
+    for _, row in edges_df.iterrows():
+        src = str(row.get("source", row.get("gene1", "")))
+        tgt = str(row.get("target", row.get("gene2", "")))
+        w = float(row.get("weight", row.get("correlation", 0.5)))
+        if src and tgt:
+            G.add_edge(src, tgt, weight=abs(w))
 
-    if len(G.nodes) == 0:
-        print("No nodes in hub network.")
-        return
+    if len(G) == 0:
+        print("Empty graph"); return
 
-    isolated = [n for n in G.nodes if G.degree(n) == 0]
-    G.remove_nodes_from(isolated)
-    if len(G.nodes) == 0:
-        print("No connected nodes in hub network.")
-        return
-
-    pos = nx.spring_layout(G, k=2.5 / np.sqrt(max(len(G.nodes), 1)),
-                           iterations=150, seed=42)
+    pos = nx.spring_layout(G, k=2.5 / np.sqrt(max(len(G), 1)),
+                           iterations=80, seed=42)
 
     fig, ax = plt.subplots(1, 1, figsize=figsize)
-    fig.patch.set_facecolor("white")
 
-    max_w = max((d.get("weight", 0.5) for _, _, d in G.edges(data=True)), default=1)
-    for u, v, d in G.edges(data=True):
-        x1, y1 = pos[u]
-        x2, y2 = pos[v]
-        w = d.get("weight", 0.5)
-        lw = 1.0 + 4.0 * abs(w / max(max_w, 1e-9))
-        ax.plot([x1, x2], [y1, y2], color="#808080",
-                linewidth=lw, alpha=0.35, zorder=1)
+    node_colors = ["#FFD700" if n in hub_genes else "#87CEEB" for n in G.nodes]
+    node_sizes = [800 if n in hub_genes else 300 for n in G.nodes]
 
-    for node in G.nodes:
-        x, y = pos[node]
-        is_hub = G.nodes[node].get("is_hub", False)
-        kme = G.nodes[node].get("kme", 0.5)
+    edge_weights = [G.edges[e].get("weight", 0.5) for e in G.edges]
+    max_w = max(edge_weights) if edge_weights else 1
+    edge_widths = [1 + 4 * (w / max_w) for w in edge_weights]
 
-        if is_hub:
-            color = "#DAA520"
-            size = 350 + kme * 500
-            edge_color = "#B8860B"
-            fontsize = 13
-            fontweight = "bold"
-        else:
-            color = "#87CEEB"
-            size = 120 + kme * 200
-            edge_color = "#4682B4"
-            fontsize = 11
-            fontweight = "normal"
+    nx.draw_networkx_edges(G, pos, ax=ax, width=edge_widths,
+                           alpha=0.3, edge_color="#999999")
+    nx.draw_networkx_nodes(G, pos, ax=ax, node_size=node_sizes,
+                           node_color=node_colors, edgecolors="white",
+                           linewidths=2, alpha=0.9)
+    nx.draw_networkx_labels(G, pos, ax=ax, font_size=11, font_weight="bold")
 
-        ax.scatter(x, y, s=size, c=color, edgecolors=edge_color,
-                   linewidths=2.0, zorder=3)
-        ax.text(x, y + 0.035, node, fontsize=fontsize, ha="center",
-                va="bottom", fontweight=fontweight, color="black",
-                path_effects=[pe.withStroke(linewidth=2.5, foreground="white")])
+    hub_patch = Patch(facecolor="#FFD700", edgecolor="white", label=f"Hub genes ({len(hub_genes)})")
+    nbr_patch = Patch(facecolor="#87CEEB", edgecolor="white",
+                      label=f"Neighbors ({len(G) - len(hub_genes)})")
+    edge_patch = Patch(facecolor="none", edgecolor="#999999",
+                       label=f"Edges ({G.number_of_edges()})")
+    ax.legend(handles=[hub_patch, nbr_patch, edge_patch],
+              loc="upper left", fontsize=13, framealpha=0.9)
 
-    from matplotlib.lines import Line2D
-    legend_elements = [
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="#DAA520",
-               markeredgecolor="#B8860B", markersize=14, label="Hub gene"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="#87CEEB",
-               markeredgecolor="#4682B4", markersize=10, label="Neighbor gene"),
-    ]
-    ax.legend(handles=legend_elements, loc="lower left", fontsize=15,
-              frameon=True, fancybox=True, shadow=True)
-
-    n_nodes = len(G.nodes)
-    n_edges = len(G.edges)
-    n_hubs_shown = sum(1 for n in G.nodes if G.nodes[n].get("is_hub", False))
-    ax.set_title(f"{title}\n({n_hubs_shown} hubs, {n_nodes - n_hubs_shown} neighbors, "
-                 f"{n_edges} edges)", fontsize=18, fontweight="bold")
+    ax.set_title("Hub Gene Network", fontsize=18, fontweight="bold", pad=15)
     ax.axis("off")
-
     plt.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close()
     print(f"Saved hub network: {output_path}")
 
 
 # =============================================================================
-# CLI ENTRY POINT
+# CLI
 # =============================================================================
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="CellDynamicST: WGCNA Network Visualization"
+        description="CellDynamicST WGCNA Network Visualization"
     )
-    sub = parser.add_subparsers(dest="command")
+    sub = parser.add_subparsers(dest="cmd")
 
-    # Atlas network
-    atlas = sub.add_parser("atlas", help="Brain atlas overlay network")
-    atlas.add_argument("--nodes", required=True, help="Nodes CSV")
-    atlas.add_argument("--edges", required=True, help="Edges CSV")
-    atlas.add_argument("--output", default="wgcna_atlas_network.png")
-    atlas.add_argument("--title", default=None)
-    atlas.add_argument("--plane", default="sagittal",
-                       choices=["sagittal", "coronal", "horizontal"],
-                       help="Atlas slice plane (default: sagittal)")
-    atlas.add_argument("--slice", type=int, default=None,
-                       help="Slice index along the chosen axis (default: midpoint)")
-    atlas.add_argument("--resolution", type=int, default=10,
-                       help="Allen annotation resolution in microns (10 or 25)")
-    atlas.add_argument("--simple", action="store_true",
-                       help="Use simple silhouette fallback (no AllenSDK)")
+    # atlas
+    p_atlas = sub.add_parser("atlas", help="Brain atlas overlay network")
+    p_atlas.add_argument("--nodes", required=True, help="Nodes CSV (region, n_genes, module_color)")
+    p_atlas.add_argument("--edges", required=True, help="Edges CSV (source, target, correlation)")
+    p_atlas.add_argument("--output", required=True)
+    p_atlas.add_argument("--plane", default="sagittal", choices=["sagittal", "coronal", "horizontal"])
+    p_atlas.add_argument("--slice", type=int, default=None, help="Slice index along chosen axis")
+    p_atlas.add_argument("--resolution", type=int, default=10)
+    p_atlas.add_argument("--title", default=None)
+    p_atlas.add_argument("--min-edge-weight", type=float, default=0.0)
 
-    # Circos
-    circos = sub.add_parser("circos", help="Module enrichment circos plot")
-    circos.add_argument("--modules", required=True, help="Module enrichment CSV")
-    circos.add_argument("--output", default="wgcna_circos.png")
-    circos.add_argument("--title", default="Consensus Module Enrichment Circos")
+    # circos
+    p_circ = sub.add_parser("circos", help="Circos enrichment plot")
+    p_circ.add_argument("--modules", required=True, help="Modules CSV")
+    p_circ.add_argument("--output", required=True)
 
-    # Hub network
-    hub = sub.add_parser("hub", help="Hub gene force-directed network")
-    hub.add_argument("--hubs", required=True, help="Hub genes CSV")
-    hub.add_argument("--edges", required=True, help="Gene-gene edges CSV")
-    hub.add_argument("--output", default="wgcna_hub_network.png")
-    hub.add_argument("--top-n", type=int, default=50)
-    hub.add_argument("--title", default="Hub Gene Subnetwork")
+    # hub
+    p_hub = sub.add_parser("hub", help="Hub gene subnetwork")
+    p_hub.add_argument("--hubs", required=True, help="Hub genes CSV (gene column)")
+    p_hub.add_argument("--edges", required=True, help="Edges CSV (source, target, weight)")
+    p_hub.add_argument("--output", required=True)
 
     args = parser.parse_args()
 
-    if args.command == "atlas":
+    if args.cmd == "atlas":
         nodes = pd.read_csv(args.nodes)
         edges = pd.read_csv(args.edges)
-        if args.simple:
-            plot_atlas_network_simple(nodes, edges, args.output, title=args.title or "WGCNA Module Network")
-        else:
+        try:
             plot_atlas_network(
                 nodes, edges, args.output,
                 plane=args.plane,
                 slice_idx=args.slice,
                 resolution=args.resolution,
                 title=args.title,
+                min_edge_weight=args.min_edge_weight,
             )
-
-    elif args.command == "circos":
+        except ImportError as e:
+            print(f"AllenSDK not available: {e}")
+            print("Falling back to simple brain silhouette...")
+            plot_atlas_network_simple(nodes, edges, args.output)
+    elif args.cmd == "circos":
         modules = pd.read_csv(args.modules)
-        plot_circos(modules, args.output, title=args.title)
-
-    elif args.command == "hub":
+        plot_circos(modules, args.output)
+    elif args.cmd == "hub":
         hubs = pd.read_csv(args.hubs)
         edges = pd.read_csv(args.edges)
-        plot_hub_network(hubs, edges, args.output,
-                        top_n=args.top_n, title=args.title)
+        plot_hub_network(hubs, edges, args.output)
     else:
         parser.print_help()
-
-
-if __name__ == "__main__":
-    main()
